@@ -1,0 +1,36 @@
+name: fe_doc_to_pdf
+description: >-
+  Operator app for the Word-to-PDF splitter: pick a Word document and a
+  recipient sheet, split it into one PDF per recipient, then send each PDF over
+  WhatsApp.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # API calls and multipart uploads.
+  http: ^1.2.0
+  # Picking the .docx and the .csv/.xlsx from device storage.
+  file_picker: ^8.0.0
+  # Opening wa.me links in WhatsApp.
+  url_launcher: ^6.2.5
+  # Handing the downloaded PDF to WhatsApp through the OS share sheet --
+  # a wa.me link cannot carry an attachment.
+  share_plus: ^10.1.0
+  # Somewhere to keep the downloaded parts.
+  path_provider: ^2.1.2
+  # Remembering the API base URL between launches.
+  shared_preferences: ^2.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
