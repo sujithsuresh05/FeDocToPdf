@@ -7,6 +7,10 @@ One project, two repos:
 | `sujithsuresh05/BeDocToPdf` | API: convert, split, pair, link | `claude/wizardly-volta-8c3j0k` |
 | `sujithsuresh05/FeDocToPdf` | Flutter operator app | `claude/wizardly-volta-8c3j0k` |
 
+**Live tracker:** [https://claude.ai/code/artifact/d8ef3bf1-4383-40f1-b94a-b105fdbae2c8](https://claude.ai/code/artifact/d8ef3bf1-4383-40f1-b94a-b105fdbae2c8) — the same phases with tickable tasks and a
+saved "where we stopped" note. Ticking there is shared with anyone holding the
+link; this file stays the version-controlled copy.
+
 ## The problem, in the user's own data
 
 A ward Profession Tax run is a single **362-page `.docx`** containing **181
