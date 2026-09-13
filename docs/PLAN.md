@@ -11,6 +11,42 @@ One project, two repos:
 saved "where we stopped" note. Ticking there is shared with anyone holding the
 link; this file stays the version-controlled copy.
 
+---
+
+## ▶ Resume here — last worked 2026-09-13
+
+**Where things stand:** the backend is finished for Phase 1 and verified against
+the real 362-page notice run. The Flutter app is written in full but **has never
+been compiled** — Flutter was not installed in the environment it was authored
+in. Both repos are pushed and clean on `claude/wizardly-volta-8c3j0k`.
+
+**Tomorrow, in this order:**
+
+1. **Compile the frontend.** This is the only thing blocking a clickable POC.
+   ```sh
+   cd FeDocToPdf
+   flutter pub get && flutter analyze && flutter test
+   ```
+   Two findings are expected: the `share_plus` major version (v10 uses
+   `Share.shareXFiles`, v11 moved to `SharePlus.instance.share(ShareParams(...))`
+   — fix `lib/services/delivery_service.dart` if pub resolves 11+), and
+   `withOpacity` being deprecated on a newer SDK in `lib/ui/widgets/part_tile.dart`.
+2. **Generate the platform folders** (not committed):
+   ```sh
+   flutter create . --platforms=android,ios
+   ```
+3. **Start the backend** and point the app at it:
+   ```sh
+   cd BeDocToPdf && bash scripts/setup-env.sh && npm start
+   ```
+   Set `PUBLIC_BASE_URL` to the computer's LAN IP first, and use that same
+   address in the app — otherwise download links point at the phone itself.
+4. **Run the real document through the app** end to end: marker `Form No.128`,
+   key label `Serial No:`, filename pattern `ProfTax_Traders_Notice-{{index}}`.
+5. Then Phase 3 below.
+
+**Nothing is outstanding on the backend.** 55 tests pass, `npm audit` is clean.
+
 ## The problem, in the user's own data
 
 A ward Profession Tax run is a single **362-page `.docx`** containing **181
@@ -99,3 +135,107 @@ removing.
 | Sheet row count ≠ notice count (5 vs 181 in the sample) | Always reported as a warning; extra parts get no link |
 | Unofficial WhatsApp automation would risk a ban | Rejected; official API only |
 | Real data contains personal phone numbers | Never committed; synthetic fixtures only |
+
+---
+
+## Session log
+
+### 2026-09-13 — Phase 1 built and verified; Phase 2 written
+
+**Shipped**
+
+- Complete Node/Express backend: LibreOffice conversion, four split modes,
+  marker sectioning, recipient parsing, part↔row pairing, `wa.me` links,
+  background jobs with polling, document analysis endpoint. 55 tests.
+- Complete Flutter operator app: API client, setup form with marker
+  suggestions, job polling, delivery list with *Open chat* / *Share PDF* /
+  *Mark sent*, *Next unsent* jump, warning surfacing. 16 model tests (unrun).
+
+**Verified on the real uploaded sample**
+
+| | |
+|---|---|
+| Source | one 362-page `.docx` |
+| Output | **181 PDFs, exactly 2 pages each** |
+| Filenames | `ProfTax_Traders_Notice-1..181.pdf` |
+| Sheet header | auto-found on **row 4** |
+| Keys | from `Sl No.`, values 1–181 |
+| Phones | pulled out of the combined `E-mail & phone Number` column |
+| Mismatch | 5 sheet rows vs 181 parts — reported as a warning, extra parts get no link |
+
+**What the real data changed in the design**
+
+- **The spreadsheet header is not row 1.** Three merged title banners
+  (`CORPORATION OF THIRUVANANTHAPURAM`, the assessment-list title,
+  `NEDUMCAUD WARD(54)`) sit above it, so the parser scores candidate rows and
+  finds the header instead of assuming its position.
+- **One column holds phone *and* e-mail, often several numbers.**
+  `Mob: 8086006942, 8086006941, email: oprh694@axisbank.com` →
+  `+918086006942`, with `+918086006941` kept as an alternative. Digits inside
+  e-mail local parts (`oprh694@…`) are ignored.
+- **The marker and the key are different text.** A notice begins with
+  `Form No.128` but identifies itself further down with `Serial No: 12`, so
+  marker and key label are separate fields rather than one pattern.
+- **Serial numbers are not unique.** The sample runs 1–177 and then restarts
+  1–4, so pairing defaults to document order and `matchBy=key` degrades to
+  order with a warning rather than mis-delivering a notice.
+
+**About the three sample PDFs that were provided**
+
+`ProfTax_Traders_Notice-1..3.pdf` are **format references, not expected bytes.**
+They came from a different run: they read `2025-2026 IInd Half` while the
+provided `.docx` is `2026-27 Ist Half`, they omit the phone line, and they carry
+overlapping duplicated text layers. Our parts are structurally correct (right
+notice, right serial, right name, two pages) and far smaller — 70 KB vs 637 KB,
+because only the resources each page actually needs are copied.
+
+**Environment fixes that cost time — already codified**
+
+- The container shipped `libreoffice-core` **without Writer**, so every
+  conversion failed with `Error: source file could not be loaded`. Installing
+  `libreoffice-writer` fixed it; `scripts/setup-env.sh` now does this and
+  verifies. Run it once per fresh container.
+- Replaced `xlsx`/SheetJS — abandoned on npm at a high-severity advisory with
+  no fix — with `exceljs`. Upgraded `multer` 1.x→2.x. Pinned `qs` and `uuid`
+  via `overrides`. `npm audit` must stay at 0.
+
+**Reproducing the backend verification**
+
+```sh
+bash scripts/setup-env.sh
+PORT=4010 STORAGE_DIR=/tmp/e2e-storage npm start &
+
+# suggests the marker and key label from the document itself
+curl -s -X POST localhost:4010/api/analyse -F "document=@ProfTax.docx"
+
+curl -s -X POST localhost:4010/api/jobs \
+  -F "document=@ProfTax.docx" -F "recipients=@prof_tax_test.xlsx" \
+  -F "splitMode=section" -F "marker=Form No.128" -F "keyLabel=Serial No:" \
+  -F "filenamePattern=ProfTax_Traders_Notice-{{index}}"
+# then poll GET /api/jobs/<id> until status=ready
+```
+
+**Open decisions**
+
+1. **Backend language — decided for now: stay on Node.** An earlier planning
+   chat recommended Python. Phase 1 is built and verified in Node; the call was
+   to keep Node and revisit once the end-to-end POC is clickable. The Flutter
+   app talks HTTP and is unaffected. If revived, the mapping is close:
+   `pdf-lib`→`pypdf`/PyMuPDF, `pdfjs-dist`→PyMuPDF text extraction,
+   `exceljs`→`openpyxl`, `libphonenumber-js`→`phonenumbers`, Express→FastAPI,
+   LibreOffice unchanged. Cost is ~1,400 lines plus 55 tests rewritten for no
+   new capability. **Do not start a rewrite without an explicit decision.**
+2. `DEFAULT_COUNTRY` on the backend is `IN`. Confirm if other regions are needed.
+3. Should the operator be able to correct a wrong phone number in-app (Phase 3),
+   or fix the sheet and re-run?
+
+**Housekeeping**
+
+- Real uploaded sample data is **deliberately not committed** to either repo —
+  it contains actual traders' names and phone numbers. Test fixtures are
+  synthetic (`tests/fixtures/payslips.docx`, regenerable via
+  `scripts/make-fixture.mjs`).
+- The earlier planning chat was **not readable** from the session that built
+  this: the container starts from a fresh clone with no prior transcript. That
+  is why this file, `CLAUDE.md` and `docs/PROGRESS.md` exist — so context is
+  carried in the repo rather than in a conversation.
