@@ -5,6 +5,69 @@ resume without re-reading the code.
 
 ---
 
+## 2026-09-17 — Flutter app compiled, analyzed and tested for the first time
+
+**State:** green. `flutter analyze` reports no issues and all 14 model tests
+pass on **Flutter 3.47.4 / Dart 3.13.3**. `android/` and `ios/` are committed.
+The app has still never been *run* — that needs an Android SDK or Xcode.
+
+### Flutter is not preinstalled in these containers
+
+`flutter` was absent again on a fresh container. Installing the stable tarball
+takes about 20 seconds (1.5 GB); exact steps are in `CLAUDE.md`. The one
+non-obvious part: `git config --global --add safe.directory /opt/flutter`, or
+every `flutter` command dies with "detected dubious ownership".
+
+### What the analyzer found (3 issues, all deprecations, no errors)
+
+The code type-checked on the first run. Fixes applied:
+
+- `DropdownButtonFormField.value` → `initialValue` (2 call sites in
+  `home_screen.dart`). **This is a rename, not a behaviour change** — worth
+  recording because it looks like one. The constructor already forwarded
+  `value` to `FormField.initialValue`, and while the base `FormFieldState`
+  ignores `initialValue` changes, `_DropdownButtonFormFieldState` overrides
+  `didUpdateWidget` to call `setValue(widget.initialValue)`. So the split-mode
+  dropdown still tracks a programmatic change, which it must: choosing a marker
+  suggestion sets the mode to `section`.
+- `Color.withOpacity` → `withValues(alpha:)` in `part_tile.dart`.
+
+Both APIs postdate the old `>=3.4.0` floor, so `pubspec.yaml` now gates on
+`flutter: '>=3.33.0'` — an older SDK fails resolution instead of failing to
+compile.
+
+### The share_plus risk did not materialise, and is now pinned
+
+`share_plus` resolved to **10.1.4**, where `Share.shareXFiles` still exists, so
+`delivery_service.dart` needed no change. Version 11 *would* break it.
+
+That made a real problem visible: `.gitignore` was the **Flutter SDK
+repository's**, which ignores `*.lock` — sensible for a package, wrong for an
+app — so `pubspec.lock` was never committed and a later resolve could have
+picked share_plus 11 silently. The lockfile is committed now, behind a
+`!pubspec.lock` negation placed **after** the `*.lock` rule; putting it before
+had no effect, since gitignore resolves by last match.
+
+### `flutter create .` needs watching
+
+Generating the platform folders had two side effects, both reverted:
+
+- it added a `test/widget_test.dart` driving the counter sample app and
+  referencing a `MyApp` that does not exist here — it would fail analyze and
+  test, so it was deleted;
+- it rewrote `pubspec.lock`, downgrading six transitive packages away from the
+  verified resolution.
+
+Its `.idea/` and `*.iml` output is now ignored.
+
+### Next session starts here
+
+The app compiles; the remaining step is to *run* it. See `docs/PLAN.md`
+→ "Resume here" for the ordered steps. Nothing is outstanding in this repo
+that can be done without a device.
+
+---
+
 ## 2026-09-13 — Phase 2 written (frontend), needs a compile pass
 
 **State:** the full operator flow is implemented. Backend Phase 1 is done and
@@ -25,7 +88,7 @@ authoring environment.
   pending-only filter, resume last job
 - `DeliveryService` — `wa.me` deep link + share sheet, with the two-tap
   limitation documented where it is implemented
-- `test/models_test.dart` — 16 model tests (unrun)
+- `test/models_test.dart` — 14 model tests (unrun at the time)
 - Static checks passed: balanced delimiters in all 14 Dart files, every
   relative import resolves, every imported package declared in `pubspec.yaml`
 

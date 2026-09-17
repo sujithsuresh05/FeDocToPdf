@@ -7,7 +7,8 @@ Read this first in a new session. It exists so we do not re-derive context.
 The operator-facing half of the Word→PDF splitter: pick a `.docx` + recipient
 sheet, split into one PDF per recipient, then send each over WhatsApp.
 Backend repo: `sujithsuresh05/BeDocToPdf` (Node/Express).
-Working branch in both repos: `claude/wizardly-volta-8c3j0k`.
+Branching: feature branches are cut from `Development` and promoted
+`Development` → `QA` → `Release` → `main`. See `docs/BRANCHING.md`.
 
 ## Stack
 
@@ -17,25 +18,50 @@ Working branch in both repos: `claude/wizardly-volta-8c3j0k`.
 - State: plain `ChangeNotifier` + `AnimatedBuilder`. No state-management
   package — one screen owns one job, and that is all this needs.
 
-## Status: written, not compiled
+## Status: compiled, analyzed and tested
 
-Flutter was **not installed** in the authoring environment, so this code has
-never been through `flutter analyze` or `flutter test`. Structure, imports and
-declared dependencies were verified statically. **First job in a new session:**
+Verified on **Flutter 3.47.4 / Dart 3.13.3** (2026-09-17):
 
 ```sh
 flutter pub get && flutter analyze && flutter test
+# analyze: No issues found!   test: 14/14 pass
 ```
 
-Fix whatever that reports before adding features. Two things to watch:
+Still unverified: an actual device build and a run against the backend. That
+needs the Android SDK or Xcode, neither of which is in these containers.
 
-- `share_plus` ^10 uses `Share.shareXFiles(...)`. Version 11 moved to
-  `SharePlus.instance.share(ShareParams(...))` — if pub resolves 11+, update
-  `lib/services/delivery_service.dart`.
-- `part_tile.dart` uses `Color.withOpacity`, correct for the Flutter 3.22
-  floor. On a modern SDK the analyzer will suggest `withValues(alpha:)`.
+### Installing Flutter (it is not preinstalled here)
 
-Platform folders are not committed: `flutter create . --platforms=android,ios`.
+A fresh container has no `flutter` on PATH. The SDK downloads in about 20
+seconds:
+
+```sh
+curl -s https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json \
+  | grep -o '"archive": *"stable/linux/flutter_linux_[^"]*"' | head -1   # pick the current stable
+curl -o /tmp/flutter.tar.xz \
+  https://storage.googleapis.com/flutter_infra_release/releases/<archive path>
+tar -xJf /tmp/flutter.tar.xz -C /opt
+git config --global --add safe.directory /opt/flutter   # else "dubious ownership"
+export PATH="/opt/flutter/bin:$PATH"
+flutter --disable-analytics
+```
+
+### Version constraints are deliberate
+
+`pubspec.yaml` gates on `flutter: '>=3.33.0'` because
+`DropdownButtonFormField.initialValue` needs 3.33 and `Color.withValues` needs
+3.27. An older SDK now fails resolution loudly instead of failing to compile.
+
+**`pubspec.lock` is committed, and must stay committed.** The repository's
+`.gitignore` came from the Flutter SDK repo and ignored `*.lock`, which suits a
+package and not an app; there is now a `!pubspec.lock` negation *after* that
+rule (gitignore resolves by last match). It matters: the lock pins `share_plus`
+**10.1.4**, and share_plus 11 replaces the `Share.shareXFiles` call in
+`lib/services/delivery_service.dart`.
+
+Platform folders (`android/`, `ios/`) are committed. Do not re-run
+`flutter create .` casually — it reinstates a counter-app `test/widget_test.dart`
+that fails, and rewrites `pubspec.lock` with downgraded transitive packages.
 
 ## Architecture
 

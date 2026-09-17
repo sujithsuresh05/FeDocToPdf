@@ -13,39 +13,46 @@ link; this file stays the version-controlled copy.
 
 ---
 
-## ▶ Resume here — last worked 2026-09-13
+## ▶ Resume here — last worked 2026-09-17
 
-**Where things stand:** the backend is finished for Phase 1 and verified against
-the real 362-page notice run. The Flutter app is written in full but **has never
-been compiled** — Flutter was not installed in the environment it was authored
-in. Both repos are pushed and clean on `claude/wizardly-volta-8c3j0k`.
+**Where things stand:** both repos are green. The backend is finished for
+Phase 1 and verified against the real 362-page notice run (55 tests, `npm
+audit` clean). The Flutter app is now **compiled, analyzed and tested** for the
+first time — Flutter 3.47.4 / Dart 3.13.3, `flutter analyze` reports no issues
+and all 14 model tests pass — and `android/` and `ios/` are committed so it can
+be built from a clean clone.
 
-**Tomorrow, in this order:**
+**What is still unverified:** the app has never been *run*. A device or
+emulator build needs the Android SDK or Xcode, and neither is present in these
+containers. Everything up to and including compilation is confirmed.
 
-1. **Compile the frontend.** This is the only thing blocking a clickable POC.
+**Next, in order:**
+
+1. **Run it, on a machine with the Android SDK or Xcode.**
    ```sh
-   cd FeDocToPdf
-   flutter pub get && flutter analyze && flutter test
+   cd FeDocToPdf && flutter run
    ```
-   Two findings are expected: the `share_plus` major version (v10 uses
-   `Share.shareXFiles`, v11 moved to `SharePlus.instance.share(ShareParams(...))`
-   — fix `lib/services/delivery_service.dart` if pub resolves 11+), and
-   `withOpacity` being deprecated on a newer SDK in `lib/ui/widgets/part_tile.dart`.
-2. **Generate the platform folders** (not committed):
+2. **Start the backend and make it reachable from the device.**
    ```sh
-   flutter create . --platforms=android,ios
+   cd BeDocToPdf && bash scripts/setup-env.sh
+   PUBLIC_BASE_URL=http://<your-LAN-IP>:4000 npm start
    ```
-3. **Start the backend** and point the app at it:
-   ```sh
-   cd BeDocToPdf && bash scripts/setup-env.sh && npm start
-   ```
-   Set `PUBLIC_BASE_URL` to the computer's LAN IP first, and use that same
-   address in the app — otherwise download links point at the phone itself.
-4. **Run the real document through the app** end to end: marker `Form No.128`,
-   key label `Serial No:`, filename pattern `ProfTax_Traders_Notice-{{index}}`.
-5. Then Phase 3 below.
+   Put that same address in the app's API base URL field. `localhost` on a
+   phone means the phone.
+3. **Feed it the real document** and walk the delivery list end to end: marker
+   `Form No.128`, key label `Serial No:`, filename pattern
+   `ProfTax_Traders_Notice-{{index}}`. Confirm *Open chat* and *Share PDF*
+   behave on a real WhatsApp install — that two-tap hand-off is the one part no
+   test covers.
+4. Then Phase 3 below.
 
-**Nothing is outstanding on the backend.** 55 tests pass, `npm audit` is clean.
+**Environment, before anything:** neither Flutter nor (in some containers)
+LibreOffice Writer is preinstalled. Each repo's `CLAUDE.md` has the exact
+install steps; in `BeDocToPdf`, `scripts/setup-env.sh` handles it.
+
+**Branching:** feature branches are cut from `Development` and promoted
+`Development` → `QA` → `Release` → `main`; `hotfix/*` is the only branch cut
+from `main`. See `docs/BRANCHING.md`.
 
 ## The problem, in the user's own data
 
@@ -87,18 +94,22 @@ removing.
 - [x] 55 tests; `npm audit` clean
 - [x] Verified end-to-end on the real 362-page document
 
-## Phase 2 — Flutter operator app 🚧 next
+## Phase 2 — Flutter operator app ✅ built and verified
 
-- [ ] API client + typed models, base URL configurable in-app
-- [ ] Pick `.docx` + sheet; call `/api/analyse`; prefill marker/keyLabel from
+- [x] API client + typed models, base URL configurable in-app
+- [x] Pick `.docx` + sheet; call `/api/analyse`; prefill marker/keyLabel from
       the suggestions instead of making the operator guess
-- [ ] Job form: split mode, chunk size, filename pattern, message template
-- [ ] Poll job status with clear progress (`converting` → `splitting` → `ready`)
-- [ ] Results list: recipient, phone, pages, size, warning badges
-- [ ] Per row: **Open WhatsApp** (`wa.me`) + **Share PDF** (share sheet), then
+- [x] Job form: split mode, chunk size, filename pattern, message template
+- [x] Poll job status with clear progress (`converting` → `splitting` → `ready`)
+- [x] Results list: recipient, phone, pages, size, warning badges
+- [x] Per row: **Open WhatsApp** (`wa.me`) + **Share PDF** (share sheet), then
       **Mark sent**; persist sent state to the API
-- [ ] "Next unsent" flow so 181 notices can be worked through without hunting
-- [ ] Surface `job.warnings` prominently — unmatched parts must not look normal
+- [x] "Next unsent" flow so 181 notices can be worked through without hunting
+- [x] Surface `job.warnings` prominently — unmatched parts must not look normal
+- [x] Compiles clean: `flutter analyze` — no issues; 14/14 tests pass (3.47.4)
+- [x] `android/` and `ios/` committed; `pubspec.lock` committed and pinned
+- [ ] **Run on a device or emulator against the backend** (needs Android SDK /
+      Xcode — not available in the container this was built in)
 
 ## Phase 3 — Operator hardening
 
