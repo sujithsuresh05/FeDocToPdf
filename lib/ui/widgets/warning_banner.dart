@@ -18,16 +18,29 @@ class WarningBanner extends StatelessWidget {
   /// it is the one that means notices will go undelivered.
   static int _severity(String warning) {
     final w = warning.toLowerCase();
-    if (w.contains('deliverable part') || w.contains('no recipient')) return 0;
+    // Notices that will not reach anybody, or people who will receive nothing.
+    // Matched on the server's own phrasing; see the backend's
+    // pipeline.service.js pairPartsWithRecipients.
+    if (w.contains('no recipient') ||
+        w.contains('have no notice') ||
+        w.contains('receive nothing')) {
+      return 0;
+    }
+    // Something was dropped or unusable, but the run is still deliverable.
     if (w.contains('unusable phone') || w.contains('not assigned')) return 1;
     return 2;
   }
+
+  /// Most severe first. Exposed so the ordering can be asserted against the
+  /// backend's real warning sentences without pumping a widget.
+  static List<String> orderBySeverity(List<String> warnings) =>
+      [...warnings]..sort((a, b) => _severity(a).compareTo(_severity(b)));
 
   @override
   Widget build(BuildContext context) {
     if (warnings.isEmpty) return const SizedBox.shrink();
 
-    final ordered = [...warnings]..sort((a, b) => _severity(a).compareTo(_severity(b)));
+    final ordered = orderBySeverity(warnings);
     final headline = ordered.first;
     final rest = ordered.skip(1).toList(growable: false);
 
