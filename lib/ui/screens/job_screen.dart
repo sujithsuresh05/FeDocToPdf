@@ -4,10 +4,13 @@ import '../../models/job.dart';
 import '../../services/api_client.dart';
 import '../../services/delivery_service.dart';
 import '../../state/job_controller.dart';
-import '../widgets/part_tile.dart';
+import '../theme.dart';
+import '../widgets/filter_pills.dart';
+import '../widgets/next_notice_card.dart';
+import '../widgets/part_row.dart';
 import '../widgets/warning_banner.dart';
 
-/// Progress while the server works, then the delivery list.
+/// Progress while the server works, then the delivery worklist.
 class JobScreen extends StatefulWidget {
   const JobScreen({
     required this.baseUrl,
@@ -29,9 +32,18 @@ class _JobScreenState extends State<JobScreen> {
   late final ApiClient _api;
   late final JobController _controller;
   final _delivery = DeliveryService();
-  final _listController = ScrollController();
 
-  bool _onlyPending = false;
+  PartFilter _filter = PartFilter.toSend;
+
+  /// Set when the operator taps a row to work on a notice out of order;
+  /// otherwise the focus follows the first unsent notice.
+  int? _pinnedIndex;
+
+  /// Which steps have been taken for the notice in focus, this sitting.
+  /// Not persisted: it is a hint about where the operator is in the hand-off,
+  /// not a claim about what WhatsApp did.
+  final Set<int> _chatOpened = <int>{};
+  final Set<int> _pdfShared = <int>{};
 
   @override
   void initState() {
@@ -51,84 +63,75 @@ class _JobScreenState extends State<JobScreen> {
   void dispose() {
     _controller.dispose();
     _api.close();
-    _listController.dispose();
     super.dispose();
   }
 
-  void _toast(String message) {
+  void _toast(String message, {bool bad = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(SnackBar(
+        content: Text(message),
+        backgroundColor: bad ? AppColors.blocked : AppColors.ink,
+        behavior: SnackBarBehavior.floating,
+      ));
+  }
+
+  JobPart? _focused(Job job) {
+    final pinned = _pinnedIndex;
+    if (pinned != null) {
+      for (final part in job.parts) {
+        if (part.index == pinned) return part;
+      }
+    }
+    return job.nextUnsent ?? (job.parts.isEmpty ? null : job.parts.first);
   }
 
   Future<void> _openChat(JobPart part) async {
     final link = part.whatsappLink;
     if (link == null) {
-      _toast(part.blockedReason ?? 'No WhatsApp link for this part.');
+      _toast(part.blockedReason ?? 'No WhatsApp link for this notice.', bad: true);
       return;
     }
     final opened = await _delivery.openChat(link);
     if (!opened) {
-      _toast('Could not open WhatsApp. Is it installed on this device?');
+      _toast('Could not open WhatsApp. Is it installed on this device?', bad: true);
+      return;
     }
+    if (mounted) setState(() => _chatOpened.add(part.index));
   }
 
-  /// Download the part if needed, then hand it to the share sheet.
   Future<void> _sharePdf(JobPart part) async {
     final file = await _controller.download(part);
     if (file == null) {
-      _toast(_controller.error ?? 'Could not download that PDF.');
+      _toast(_controller.error ?? 'Could not download that PDF.', bad: true);
       _controller.clearError();
       return;
     }
     final shared = await _delivery.sharePdf(file, message: part.message);
     if (!shared) {
-      _toast('Could not open the share sheet.');
+      _toast('Could not open the share sheet.', bad: true);
       return;
     }
-    if (!part.sent && mounted) _promptMarkSent(part);
+    if (mounted) setState(() => _pdfShared.add(part.index));
   }
 
-  /// After a share the app cannot know whether the operator actually pressed
-  /// send in WhatsApp, so ask rather than assume.
-  void _promptMarkSent(JobPart part) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('Sent ${part.filename}?'),
-          action: SnackBarAction(
-            label: 'Mark sent',
-            onPressed: () => _controller.setSent(part, sent: true),
-          ),
-          duration: const Duration(seconds: 6),
-        ),
-      );
+  Future<void> _markSent(Job job, JobPart part) async {
+    await _controller.setSent(part, sent: true);
+    if (!mounted) return;
+    setState(() {
+      _chatOpened.remove(part.index);
+      _pdfShared.remove(part.index);
+      // Release the pin so focus falls through to the next unsent notice.
+      _pinnedIndex = null;
+    });
   }
 
-  void _jumpToNextUnsent(Job job) {
-    final next = job.nextUnsent;
-    if (next == null) {
-      _toast('Everything deliverable has been marked sent.');
-      return;
-    }
-    final visible = _visibleParts(job);
-    final position = visible.indexWhere((part) => part.index == next.index);
-    if (position >= 0 && _listController.hasClients) {
-      // Rows are roughly uniform, so an estimated offset is good enough to put
-      // the next one on screen.
-      _listController.animateTo(
-        (position * 150).toDouble().clamp(0, _listController.position.maxScrollExtent),
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeOut,
-      );
-    }
-  }
-
-  List<JobPart> _visibleParts(Job job) => _onlyPending
-      ? job.parts.where((part) => !part.sent).toList(growable: false)
-      : job.parts;
+  List<JobPart> _visible(Job job) => switch (_filter) {
+        PartFilter.toSend => job.parts.where((p) => p.deliverable && !p.sent).toList(),
+        PartFilter.sent => job.parts.where((p) => p.sent).toList(),
+        PartFilter.blocked => job.parts.where((p) => !p.deliverable).toList(),
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -136,17 +139,10 @@ class _JobScreenState extends State<JobScreen> {
       animation: _controller,
       builder: (context, _) {
         final job = _controller.job;
-
         return Scaffold(
           appBar: AppBar(
-            title: Text(job?.documentName ?? 'Job'),
+            title: Text(job?.documentName ?? 'Run'),
             actions: [
-              if (job != null && job.status == JobStatus.ready)
-                IconButton(
-                  tooltip: _onlyPending ? 'Show all' : 'Show pending only',
-                  onPressed: () => setState(() => _onlyPending = !_onlyPending),
-                  icon: Icon(_onlyPending ? Icons.filter_alt_off : Icons.filter_alt),
-                ),
               IconButton(
                 tooltip: 'Refresh',
                 onPressed: _controller.refresh,
@@ -154,132 +150,154 @@ class _JobScreenState extends State<JobScreen> {
               ),
             ],
           ),
-          floatingActionButton: job != null && job.status == JobStatus.ready
-              ? FloatingActionButton.extended(
-                  onPressed: () => _jumpToNextUnsent(job),
-                  icon: const Icon(Icons.arrow_downward),
-                  label: const Text('Next unsent'),
-                )
-              : null,
-          body: job == null ? _loading('Loading job...') : _body(job),
+          body: job == null ? _waiting('Loading the run…') : _body(job),
         );
       },
     );
   }
 
-  Widget _loading(String message) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(message),
-          ],
-        ),
-      );
-
-  Widget _body(Job job) {
-    if (job.status == JobStatus.failed) {
-      return Center(
+  Widget _waiting(String message) => Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
-              const SizedBox(height: 16),
-              Text('The job failed', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Text(
-                job.errorMessage ?? 'No reason was reported.',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Back'),
-              ),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 18),
+              Text(message, textAlign: TextAlign.center),
             ],
           ),
         ),
       );
-    }
 
+  Widget _body(Job job) {
+    if (job.status == JobStatus.failed) return _failed(job);
     if (job.status != JobStatus.ready) {
-      return _loading('${job.status.label}...'
-          '${job.pageCount == null ? '' : '\n${job.pageCount} pages'}');
+      return _waiting(
+        '${job.status.label}…'
+        '${job.pageCount == null ? '' : '\n${job.pageCount} pages'}',
+      );
     }
 
-    final visible = _visibleParts(job);
+    final focused = _focused(job);
+    final visible = _visible(job);
+    final toSend = job.parts.where((p) => p.deliverable && !p.sent).length;
+    final sent = job.sentCount;
+    final blocked = job.parts.where((p) => !p.deliverable).length;
 
     return Column(
       children: [
-        _progressHeader(job),
+        _header(job, toSend: toSend, sent: sent, blocked: blocked),
         WarningBanner(warnings: job.warnings),
-        if (visible.isEmpty)
-          const Expanded(child: Center(child: Text('Nothing pending.')))
-        else
-          Expanded(
-            child: ListView.builder(
-              controller: _listController,
-              itemCount: visible.length,
-              itemBuilder: (context, position) {
-                final part = visible[position];
-                return PartTile(
-                  part: part,
-                  busy: _controller.isPartBusy(part.index),
-                  highlight: job.nextUnsent?.index == part.index,
-                  onOpenChat: () => _openChat(part),
-                  onSharePdf: () => _sharePdf(part),
-                  onToggleSent: (value) => _controller.setSent(part, sent: value),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.only(bottom: 28),
+            // One focused card, then the rows of whichever slice is selected.
+            itemCount: visible.length + (focused == null ? 0 : 1),
+            itemBuilder: (context, position) {
+              if (focused != null && position == 0) {
+                return NextNoticeCard(
+                  part: focused,
+                  position: focused.index,
+                  total: job.partCount,
+                  chatOpened: _chatOpened.contains(focused.index),
+                  pdfShared: _pdfShared.contains(focused.index),
+                  busy: _controller.isPartBusy(focused.index),
+                  onOpenChat: () => _openChat(focused),
+                  onSharePdf: () => _sharePdf(focused),
+                  onMarkSent: () => _markSent(job, focused),
                 );
-              },
-            ),
+              }
+              final part = visible[position - (focused == null ? 0 : 1)];
+              if (focused != null && part.index == focused.index) {
+                return const SizedBox.shrink();
+              }
+              return PartRow(
+                part: part,
+                onTap: () => setState(() => _pinnedIndex = part.index),
+              );
+            },
           ),
+        ),
       ],
     );
   }
 
-  Widget _progressHeader(Job job) {
-    final scheme = Theme.of(context).colorScheme;
+  Widget _header(Job job, {required int toSend, required int sent, required int blocked}) {
+    final text = Theme.of(context).textTheme;
     final total = job.deliverableCount;
-    final sent = job.sentCount;
     final fraction = total == 0 ? 0.0 : sent / total;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      color: scheme.surfaceContainerHighest,
+      padding: const EdgeInsets.fromLTRB(14, 12, 0, 12),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.line)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '$sent of $total sent · ${job.partCount} PDFs from ${job.pageCount ?? '?'} pages',
-            style: Theme.of(context).textTheme.titleSmall,
+            '$sent of $total sent',
+            style: mono(text.titleMedium!, size: 17, weight: FontWeight.w600),
           ),
-          if (job.partCount != total)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                '${job.partCount - total} PDF(s) have no recipient and cannot be sent',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.error),
+          const SizedBox(height: 2),
+          Text(
+            [
+              '$toSend to go',
+              '${job.partCount} PDFs from ${job.pageCount ?? '?'} pages',
+              if (job.matchStrategy != null) 'matched by ${job.matchStrategy}',
+            ].join('  ·  '),
+            style: text.labelSmall?.copyWith(fontSize: 11.5),
+          ),
+          const SizedBox(height: 9),
+          Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: fraction,
+                minHeight: 5,
+                backgroundColor: AppColors.line,
               ),
             ),
-          if (job.matchStrategy != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                'Matched to sheet rows by ${job.matchStrategy}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(value: fraction, minHeight: 6),
+          ),
+          const SizedBox(height: 11),
+          FilterPills(
+            selected: _filter,
+            toSend: toSend,
+            sent: sent,
+            blocked: blocked,
+            onChanged: (value) => setState(() => _filter = value),
           ),
         ],
       ),
     );
   }
+
+  Widget _failed(Job job) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 46, color: AppColors.blocked),
+              const SizedBox(height: 16),
+              Text('The run failed', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(
+                job.errorMessage ?? 'No reason was reported.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 22),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Back to setup'),
+              ),
+            ],
+          ),
+        ),
+      );
 }
