@@ -31,7 +31,7 @@ class PartTile extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      color: highlight ? scheme.primaryContainer.withOpacity(0.45) : null,
+      color: highlight ? scheme.primaryContainer.withValues(alpha: 0.45) : null,
       shape: highlight
           ? RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
