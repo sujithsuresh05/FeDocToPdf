@@ -14,6 +14,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fe_doc_to_pdf/models/capabilities.dart';
 import 'package:fe_doc_to_pdf/models/job.dart';
+import 'package:fe_doc_to_pdf/ui/widgets/warning_banner.dart';
 
 Map<String, dynamic> fixture(String name) {
   final file = File('test/fixtures/api/$name.json');
@@ -150,6 +151,31 @@ void main() {
     test('nextUnsent picks the first deliverable part', () {
       final job = Job.fromJson(fixture('job')['job'] as Map<String, dynamic>);
       expect(job.nextUnsent?.index, 1);
+    });
+  });
+
+  group('warning severity', () {
+    // The banner orders warnings by matching the backend's own phrasing, so a
+    // reworded server warning would quietly demote the most important one.
+    // These are the exact sentences pipeline.service.js emits.
+    test('an undelivered-notice warning outranks housekeeping', () {
+      const undelivered =
+          '176 of 181 notices have no recipient. The sheet has 5 rows and the '
+          'document produced 181 notices, so those are still created but cannot '
+          'be sent. Check you uploaded the full list.';
+      const peopleMissed =
+          '2 of 4 people on the sheet have no notice in this document. It '
+          'produced 2 notices, so those people receive nothing. Check the '
+          'document covers the whole list.';
+      const housekeeping =
+          'Header found on row 4; the 3 row(s) above it were treated as title '
+          'banners and skipped.';
+
+      final ordered = WarningBanner.orderBySeverity(
+        [housekeeping, undelivered, peopleMissed],
+      );
+      expect(ordered.first, undelivered, reason: 'most severe leads the banner');
+      expect(ordered.last, housekeeping);
     });
   });
 
