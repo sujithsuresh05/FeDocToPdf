@@ -5,6 +5,71 @@ resume without re-reading the code.
 
 ---
 
+## 2026-09-17 (afternoon) — contract tests, device wiring, UI rebuilt
+
+**State:** green. `flutter analyze` clean, 24 tests pass. The app has still
+never been run on a device.
+
+### The models are now tested against real backend responses
+
+Model tests used hand-written JSON, which proves the parsing logic but not that
+it matches the API — a renamed server field would have surfaced at the
+operator's first tap. `test/fixtures/api/` holds responses captured from a
+running backend, parsed through the real model classes. **Result: no drift.**
+
+### Four things that would have broken the first device run
+
+Each would have failed at runtime, not at build:
+
+- `INTERNET` was missing from the **main** manifest (only debug/profile had
+  it), so a release build could make no network call at all;
+- Android 9+ blocks plaintext HTTP, so `http://<LAN-IP>:4000` failed before any
+  request left the device — cleartext is now allowed in the **debug manifest
+  only**;
+- no `<queries>` entry for `https`, which per url_launcher's own README makes
+  `canLaunchUrl` return false on Android 11+ — "Open chat" would have reported
+  WhatsApp as missing on every modern phone. `openChat` also no longer treats
+  that check as a veto;
+- iOS ATS blocks the same thing; `NSAllowsLocalNetworking` relaxes it for local
+  addresses only.
+
+### The UI was rebuilt
+
+Stock Material 3 with 181 identical cards gave no answer to "where was I", and
+showed the same two buttons on notices that could not be sent. It is now a
+worklist: one notice in focus, the rest a compact index, the hand-off drawn as
+three ordered steps, counts doubling as the filter, warnings stated rather than
+hidden. Setup leads with the common path and states what the server detected as
+a sentence to confirm.
+
+Light and dark both ship, following the phone with a persisted toggle. The dark
+palette was designed fresh after the first one was rejected: the ground is
+lifted off near-black so surfaces and rules stay legible against each other,
+and the app bar is a surface rather than a full bar of accent. Widgets read
+colour from the `ColorScheme`, so nothing knows which theme is active.
+
+### How it was verified without a device
+
+Built for web and drove the real widget tree in a headless browser at 390x844
+under both `prefers-color-scheme` settings. This is worth repeating: it caught
+a bug the analyzer cannot see — the trailing "↗" is absent from the bundled
+font and rendered as a missing-glyph box. The web platform files and the
+preview harness are not committed.
+
+### Process note
+
+PR #6 was based on another feature branch rather than `Development`, and when
+its base merged first, #6 merged into that base instead of `Development`. The
+work had to be cherry-picked onto a fresh branch off `Development` and
+re-opened. **Base feature branches on `Development`.**
+
+### Next session starts here
+
+Nothing in this repo can progress without a device. See `docs/PLAN.md` →
+"Resume here".
+
+---
+
 ## 2026-09-17 — Flutter app compiled, analyzed and tested for the first time
 
 **State:** green. `flutter analyze` reports no issues and all 14 model tests
