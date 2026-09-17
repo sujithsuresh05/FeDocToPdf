@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [Development, QA, Release, main]
+  push:
+    branches: [Development, QA, Release, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned rather than floating on stable: the version is the one the app
+      # is verified against, and moving it should be a deliberate commit that
+      # can be reverted on its own. pubspec.yaml separately gates the minimum
+      # at 3.33, where DropdownButtonFormField.initialValue arrived.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.4
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        # Not `flutter pub upgrade`: pubspec.lock is committed on purpose, since
+        # share_plus 11 removes the Share.shareXFiles call the delivery service
+        # makes. CI must fail if the lockfile stops resolving.
+        run: flutter pub get
+
+      - name: Check the lockfile was not modified
+        run: |
+          if ! git diff --quiet pubspec.lock; then
+            echo "::error::pubspec.lock changed during pub get; commit the updated lockfile."
+            git --no-pager diff --stat pubspec.lock
+            exit 1
+          fi
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
