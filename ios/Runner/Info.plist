@@ -6,6 +6,17 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<!-- App Transport Security blocks plaintext HTTP. NSAllowsLocalNetworking
+	     permits it for local hostnames and IP addresses only, which is what the
+	     development backend is, while leaving ATS in force for the internet. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<!-- iOS 14 and above prompt before an app may reach the local network. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connects to the document splitter backend running on your computer.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Fe Doc To Pdf</string>
 	<key>CFBundleExecutable</key>

@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The app talks to the splitter backend over HTTP. Only the debug and
+         profile manifests declare this by default, so a release build could
+         make no network call at all. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:label="fe_doc_to_pdf"
         android:name="${applicationName}"
@@ -40,6 +45,13 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Required for url_launcher's canLaunchUrl to resolve the wa.me
+             link on Android 11 (API 30) and above. Without it canLaunchUrl
+             returns false and the WhatsApp hand-off looks unavailable. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>
