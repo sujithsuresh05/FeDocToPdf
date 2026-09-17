@@ -6,8 +6,16 @@ import '../../models/capabilities.dart';
 import '../../services/api_client.dart';
 import '../../services/api_exception.dart';
 import '../../services/settings_service.dart';
+import '../theme.dart';
 import 'job_screen.dart';
 
+/// Set up a run: point at the backend, pick the two files, confirm what the
+/// server detected, send.
+///
+/// The screen is built around the common path. Marker, split mode, filename
+/// pattern and matching are all still here, but behind Advanced: the backend
+/// detects them and the operator's job is to confirm a sentence, not to
+/// remember that sections start at "Form No.128".
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -36,8 +44,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Capabilities? _capabilities;
   DocumentAnalysis? _analysis;
 
+  bool _connected = false;
+  bool _editingServer = true;
+  bool _analysing = false;
   bool _busy = false;
-  String? _status;
   String? _error;
   String? _resumableJobId;
 
@@ -49,12 +59,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _baseUrl.dispose();
-    _marker.dispose();
-    _keyLabel.dispose();
-    _filenamePattern.dispose();
-    _messageTemplate.dispose();
-    _chunkSize.dispose();
+    for (final c in [_baseUrl, _marker, _keyLabel, _filenamePattern, _messageTemplate, _chunkSize]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -72,22 +79,23 @@ class _HomeScreenState extends State<HomeScreen> {
       _messageTemplate.text = defaults['messageTemplate'] ?? '';
       _resumableJobId = lastJob;
     });
-
-    await _loadCapabilities(quiet: true);
+    await _connect(quiet: true);
   }
 
   ApiClient _api() => ApiClient(baseUrl: _baseUrl.text.trim());
 
-  Future<void> _loadCapabilities({bool quiet = false}) async {
+  Future<void> _connect({bool quiet = false}) async {
     final api = _api();
     try {
       final capabilities = await api.fetchCapabilities();
       if (!mounted) return;
       setState(() {
         _capabilities = capabilities;
-        _splitMode = capabilities.splitModes.contains(_splitMode)
-            ? _splitMode
-            : capabilities.defaultSplitMode;
+        _connected = true;
+        _editingServer = false;
+        if (!capabilities.splitModes.contains(_splitMode)) {
+          _splitMode = capabilities.defaultSplitMode;
+        }
         if (_filenamePattern.text.isEmpty) {
           _filenamePattern.text = capabilities.defaultFilenamePattern;
         }
@@ -95,27 +103,20 @@ class _HomeScreenState extends State<HomeScreen> {
           _messageTemplate.text = capabilities.defaultMessageTemplate;
         }
         _error = null;
-        if (!quiet) _status = 'Connected.';
       });
+      await _settings.writeBaseUrl(_baseUrl.text.trim());
     } on ApiException catch (error) {
       if (!mounted) return;
-      // On first launch the server usually is not reachable yet; do not shout
-      // about it until the operator actually asks.
-      if (!quiet) setState(() => _error = error.message);
+      setState(() {
+        _connected = false;
+        _editingServer = true;
+        // On first launch the server is usually not up yet; only complain when
+        // the operator actually pressed Connect.
+        if (!quiet) _error = error.message;
+      });
     } finally {
       api.close();
     }
-  }
-
-  Future<void> _testConnection() async {
-    setState(() {
-      _busy = true;
-      _status = null;
-      _error = null;
-    });
-    await _settings.writeBaseUrl(_baseUrl.text.trim());
-    await _loadCapabilities();
-    if (mounted) setState(() => _busy = false);
   }
 
   Future<void> _pickDocument() async {
@@ -128,8 +129,9 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _documentPath = picked!.path;
       _documentName = picked.name;
-      _analysis = null; // a new document invalidates the old suggestions
+      _analysis = null; // a new document invalidates the old detection
     });
+    if (_connected) await _analyse();
   }
 
   Future<void> _pickRecipients() async {
@@ -145,15 +147,13 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  /// Ask the server what the document looks like and pre-fill the marker and
-  /// key label, so the operator does not have to know them by heart.
+  /// Ask the server what the document looks like, and adopt what it found.
   Future<void> _analyse() async {
     final path = _documentPath;
     if (path == null) return;
 
     setState(() {
-      _busy = true;
-      _status = 'Converting and inspecting the document. This can take a minute.';
+      _analysing = true;
       _error = null;
     });
 
@@ -165,27 +165,27 @@ class _HomeScreenState extends State<HomeScreen> {
         _analysis = analysis;
         final marker = analysis.bestMarker;
         final keyLabel = analysis.bestKeyLabel;
-        if (marker != null && _marker.text.isEmpty) _marker.text = marker.marker;
-        if (keyLabel != null && _keyLabel.text.isEmpty) _keyLabel.text = keyLabel.keyLabel;
-        _status = '${analysis.pageCount} pages.'
-            '${marker == null ? '' : ' Suggested marker: "${marker.marker}" (${marker.summary}).'}';
+        if (marker != null) {
+          _marker.text = marker.marker;
+          _splitMode = 'section';
+        }
+        if (keyLabel != null) _keyLabel.text = keyLabel.keyLabel;
       });
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
     } finally {
       api.close();
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _analysing = false);
     }
   }
 
-  Future<void> _createJob() async {
+  Future<void> _split() async {
     final path = _documentPath;
     if (path == null) {
       setState(() => _error = 'Pick a Word document first.');
       return;
     }
-
     final chunk = int.tryParse(_chunkSize.text.trim()) ?? 1;
     if (_splitMode == 'chunk' && chunk < 1) {
       setState(() => _error = 'Pages per PDF must be 1 or more.');
@@ -195,7 +195,6 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _busy = true;
       _error = null;
-      _status = 'Uploading...';
     });
 
     await _settings.writeBaseUrl(_baseUrl.text.trim());
@@ -220,12 +219,9 @@ class _HomeScreenState extends State<HomeScreen> {
         messageTemplate: _messageTemplate.text.trim(),
       );
       if (!mounted) return;
-      setState(() => _status = null);
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => JobScreen(baseUrl: _baseUrl.text.trim(), initialJob: job),
-        ),
-      );
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => JobScreen(baseUrl: _baseUrl.text.trim(), initialJob: job),
+      ));
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
@@ -238,25 +234,20 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _resume() async {
     final jobId = _resumableJobId;
     if (jobId == null) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => JobScreen(baseUrl: _baseUrl.text.trim(), resumeJobId: jobId),
-      ),
-    );
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => JobScreen(baseUrl: _baseUrl.text.trim(), resumeJobId: jobId),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
-    final needsMarker = _splitMode == 'section';
-    final capabilities = _capabilities;
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Split & send notices'),
+        title: const Text('New run'),
         actions: [
           if (_resumableJobId != null)
             IconButton(
-              tooltip: 'Resume last job',
+              tooltip: 'Back to the last run',
               onPressed: _busy ? null : _resume,
               icon: const Icon(Icons.history),
             ),
@@ -265,284 +256,362 @@ class _HomeScreenState extends State<HomeScreen> {
       body: AbsorbPointer(
         absorbing: _busy,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.only(bottom: 36),
           children: [
-            _section('1. Server'),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _baseUrl,
-                    keyboardType: TextInputType.url,
-                    autocorrect: false,
-                    decoration: const InputDecoration(
-                      labelText: 'API base URL',
-                      helperText: 'Use the computer\'s LAN address, not localhost',
-                    ),
+            _serverGroup(),
+            _documentsGroup(),
+            _messageGroup(),
+            if (_error != null) _errorBox(_error!),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 18, 14, 0),
+              child: FilledButton(
+                onPressed: _busy || _documentPath == null ? null : _split,
+                child: _busy
+                    ? const SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : Text(_splitLabel()),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(14, 10, 14, 0),
+              child: Text(
+                'Nothing is sent automatically. You send each notice yourself.',
+                style: TextStyle(fontSize: 11.5, color: AppColors.muted),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _splitLabel() {
+    final count = _analysis?.bestMarker?.occurrences;
+    if (_splitMode == 'section' && count != null) return 'Split into $count PDFs';
+    if (_splitMode == 'page' && _analysis != null) {
+      return 'Split into ${_analysis!.pageCount} PDFs';
+    }
+    return 'Split the document';
+  }
+
+  // ---- groups -------------------------------------------------------------
+
+  Widget _group({required String label, required List<Widget> children}) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(bottom: BorderSide(color: AppColors.line)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label.toUpperCase(), style: kicker(context)),
+            const SizedBox(height: 8),
+            ...children,
+          ],
+        ),
+      );
+
+  Widget _serverGroup() {
+    if (_connected && !_editingServer) {
+      return _group(label: 'Backend', children: [
+        Row(
+          children: [
+            const Icon(Icons.check_circle, size: 16, color: AppColors.accent),
+            const SizedBox(width: 7),
+            const Text('Connected',
+                style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.accent)),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                _baseUrl.text.replaceFirst(RegExp(r'^https?://'), ''),
+                style: mono(Theme.of(context).textTheme.bodySmall!,
+                    color: AppColors.muted, size: 12),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            TextButton(
+              onPressed: () => setState(() => _editingServer = true),
+              child: const Text('Change'),
+            ),
+          ],
+        ),
+      ]);
+    }
+
+    return _group(label: 'Backend', children: [
+      TextField(
+        controller: _baseUrl,
+        keyboardType: TextInputType.url,
+        autocorrect: false,
+        decoration: const InputDecoration(
+          labelText: 'Address',
+          helperText: "Your computer's network address, not localhost",
+          helperMaxLines: 2,
+        ),
+      ),
+      const SizedBox(height: 10),
+      Row(
+        children: [
+          FilledButton(
+            onPressed: _busy ? null : () => _connect(),
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 42)),
+            child: const Text('Connect'),
+          ),
+          if (_connected) ...[
+            const SizedBox(width: 10),
+            TextButton(
+              onPressed: () => setState(() => _editingServer = false),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ],
+      ),
+    ]);
+  }
+
+  Widget _documentsGroup() => _group(label: 'Documents', children: [
+        _fileField(
+          icon: Icons.description_outlined,
+          value: _documentName,
+          empty: 'Choose the Word document',
+          onTap: _busy ? null : _pickDocument,
+        ),
+        const SizedBox(height: 8),
+        _fileField(
+          icon: Icons.table_chart_outlined,
+          value: _recipientsName,
+          empty: 'Choose the recipient sheet (optional)',
+          onTap: _busy ? null : _pickRecipients,
+        ),
+        if (_analysing) ...[
+          const SizedBox(height: 10),
+          const Row(children: [
+            SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(width: 9),
+            Expanded(
+              child: Text('Inspecting the document. A long one can take a minute.',
+                  style: TextStyle(fontSize: 12, color: AppColors.muted)),
+            ),
+          ]),
+        ] else if (_analysis != null) ...[
+          const SizedBox(height: 10),
+          _detection(_analysis!),
+        ],
+      ]);
+
+  Widget _fileField({
+    required IconData icon,
+    required String? value,
+    required String empty,
+    required VoidCallback? onTap,
+  }) =>
+      InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 17, color: AppColors.muted),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  value ?? empty,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: value == null ? AppColors.muted : AppColors.ink,
+                    fontWeight: value == null ? FontWeight.w400 : FontWeight.w500,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _busy ? null : _testConnection,
-                  child: const Text('Test'),
+              ),
+              const Icon(Icons.chevron_right, size: 18, color: AppColors.muted),
+            ],
+          ),
+        ),
+      );
+
+  /// What the server found, as a sentence to confirm rather than fields to fill.
+  Widget _detection(DocumentAnalysis analysis) {
+    final marker = analysis.bestMarker;
+    final keyLabel = analysis.bestKeyLabel;
+
+    if (marker == null) {
+      return Container(
+        padding: const EdgeInsets.all(11),
+        decoration: BoxDecoration(
+          color: AppColors.warnSoft,
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Text(
+          '${analysis.pageCount} pages, but no repeating heading was found. '
+          'Split per page or per fixed number of pages under Advanced, or add a '
+          '"pages" column to the sheet.',
+          style: const TextStyle(fontSize: 12, height: 1.4, color: AppColors.warn),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: AppColors.accentSoft,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text.rich(
+        TextSpan(
+          style: const TextStyle(fontSize: 12, height: 1.45, color: AppColors.accentInk),
+          children: [
+            const TextSpan(text: 'Found '),
+            TextSpan(
+              text: '${marker.occurrences} notices',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            TextSpan(
+              text: marker.pagesPerSection == null
+                  ? ' in ${analysis.pageCount} pages'
+                  : ', every ${marker.pagesPerSection} pages',
+            ),
+            const TextSpan(text: ', each starting '),
+            TextSpan(text: '"${marker.marker}"', style: _codeStyle()),
+            if (keyLabel != null) ...[
+              const TextSpan(text: ' and numbered by '),
+              TextSpan(text: '"${keyLabel.keyLabel}"', style: _codeStyle()),
+            ],
+            const TextSpan(text: '.'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  TextStyle _codeStyle() => mono(
+        const TextStyle(),
+        color: AppColors.accentInk,
+        size: 11.5,
+        weight: FontWeight.w500,
+      );
+
+  Widget _messageGroup() => _group(label: 'Message', children: [
+        TextField(
+          controller: _messageTemplate,
+          minLines: 2,
+          maxLines: 4,
+          decoration: InputDecoration(
+            helperText: _capabilities == null
+                ? 'Use {{name}} for the recipient'
+                : 'Tokens: ${_capabilities!.messageTokens.map((t) => '{{$t}}').join(' ')}',
+            helperMaxLines: 2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Theme(
+          // A divider-free tile so Advanced reads as part of this group.
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: 4),
+            title: const Text(
+              'Advanced',
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: AppColors.inkSoft),
+            ),
+            subtitle: const Text(
+              'Split mode, matching, filenames',
+              style: TextStyle(fontSize: 11.5, color: AppColors.muted),
+            ),
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: _splitMode,
+                decoration: const InputDecoration(labelText: 'Split mode'),
+                items: (_capabilities?.splitModes ?? const ['section', 'page', 'chunk', 'whole'])
+                    .map((mode) => DropdownMenuItem(
+                          value: mode,
+                          child: Text('$mode — ${AppConfig.splitModeDescriptions[mode] ?? ''}',
+                              overflow: TextOverflow.ellipsis),
+                        ))
+                    .toList(growable: false),
+                onChanged: (value) => setState(() => _splitMode = value ?? 'section'),
+              ),
+              if (_splitMode == 'chunk') ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _chunkSize,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Pages per PDF'),
                 ),
               ],
-            ),
-            if (capabilities != null && !capabilities.attachesFileAutomatically)
-              const Padding(
-                padding: EdgeInsets.only(top: 12),
-                child: _DeliveryNotice(),
-              ),
-
-            _section('2. Files'),
-            _filePickerTile(
-              icon: Icons.description_outlined,
-              label: 'Word document',
-              value: _documentName,
-              onPressed: _busy ? null : _pickDocument,
-            ),
-            _filePickerTile(
-              icon: Icons.table_chart_outlined,
-              label: 'Recipient sheet (.csv / .xlsx)',
-              value: _recipientsName,
-              onPressed: _busy ? null : _pickRecipients,
-              optional: true,
-            ),
-            if (_documentPath != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: OutlinedButton.icon(
-                  onPressed: _busy ? null : _analyse,
-                  icon: const Icon(Icons.search),
-                  label: const Text('Inspect document & suggest marker'),
+              if (_splitMode == 'section') ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _marker,
+                  decoration: const InputDecoration(
+                    labelText: 'Heading that starts each notice',
+                    helperMaxLines: 2,
+                  ),
                 ),
-              ),
-            if (_analysis != null) _analysisSummary(_analysis!),
-
-            _section('3. How to split'),
-            DropdownButtonFormField<String>(
-              initialValue: _splitMode,
-              decoration: const InputDecoration(labelText: 'Split mode'),
-              items: (capabilities?.splitModes ?? const ['section', 'page', 'chunk', 'whole'])
-                  .map(
-                    (mode) => DropdownMenuItem(
-                      value: mode,
-                      child: Text(mode),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: (value) => setState(() => _splitMode = value ?? 'section'),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 6, bottom: 6),
-              child: Text(
-                AppConfig.splitModeDescriptions[_splitMode] ?? '',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-            if (_splitMode == 'chunk')
-              TextField(
-                controller: _chunkSize,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Pages per PDF'),
-              ),
-            if (needsMarker) ...[
-              const SizedBox(height: 8),
-              TextField(
-                controller: _marker,
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _keyLabel,
+                  decoration: const InputDecoration(
+                    labelText: 'Label before each number (optional)',
+                    helperMaxLines: 2,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _matchBy,
                 decoration: const InputDecoration(
-                  labelText: 'Section marker',
-                  helperText: 'Text on the first page of each recipient\'s section',
+                  labelText: 'Match notices to sheet rows by',
+                  helperText: 'Order is safest; numbers can repeat between wards',
+                  helperMaxLines: 2,
                 ),
+                items: (_capabilities?.matchStrategies ?? const ['order', 'key'])
+                    .map((value) => DropdownMenuItem(value: value, child: Text(value)))
+                    .toList(growable: false),
+                onChanged: (value) => setState(() => _matchBy = value ?? 'order'),
               ),
               const SizedBox(height: 12),
               TextField(
-                controller: _keyLabel,
-                decoration: const InputDecoration(
-                  labelText: 'Key label (optional)',
-                  helperText: 'Label before each section\'s id, e.g. "Serial No:"',
+                controller: _filenamePattern,
+                decoration: InputDecoration(
+                  labelText: 'Filename pattern',
+                  helperText: _capabilities == null
+                      ? null
+                      : 'Tokens: ${_capabilities!.filenameTokens.map((t) => '{{$t}}').join(' ')}',
+                  helperMaxLines: 2,
                 ),
               ),
             ],
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _matchBy,
-              decoration: const InputDecoration(
-                labelText: 'Match parts to sheet rows by',
-                helperText: 'Order is safest; keys can repeat across wards',
-              ),
-              items: (capabilities?.matchStrategies ?? const ['order', 'key'])
-                  .map((value) => DropdownMenuItem(value: value, child: Text(value)))
-                  .toList(growable: false),
-              onChanged: (value) => setState(() => _matchBy = value ?? 'order'),
-            ),
-
-            _section('4. Naming & message'),
-            TextField(
-              controller: _filenamePattern,
-              decoration: InputDecoration(
-                labelText: 'Filename pattern',
-                helperText: capabilities == null
-                    ? null
-                    : 'Tokens: ${capabilities.filenameTokens.map((t) => '{{$t}}').join(' ')}',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _messageTemplate,
-              minLines: 2,
-              maxLines: 4,
-              decoration: InputDecoration(
-                labelText: 'WhatsApp message',
-                helperText: capabilities == null
-                    ? null
-                    : 'Tokens: ${capabilities.messageTokens.map((t) => '{{$t}}').join(' ')}',
-              ),
-            ),
-
-            const SizedBox(height: 20),
-            if (_status != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(_status!, style: Theme.of(context).textTheme.bodyMedium),
-              ),
-            if (_error != null)
-              Card(
-                color: Theme.of(context).colorScheme.errorContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    _error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
-                  ),
-                ),
-              ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: _busy || _documentPath == null ? null : _createJob,
-              icon: _busy
-                  ? const SizedBox(
-                      width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.call_split),
-              label: Text(_busy ? 'Working...' : 'Split document'),
-            ),
-            const SizedBox(height: 32),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _section(String title) => Padding(
-        padding: const EdgeInsets.only(top: 20, bottom: 10),
-        child: Text(title, style: Theme.of(context).textTheme.titleMedium),
-      );
-
-  Widget _filePickerTile({
-    required IconData icon,
-    required String label,
-    required String? value,
-    required VoidCallback? onPressed,
-    bool optional = false,
-  }) =>
-      Card(
-        margin: const EdgeInsets.only(bottom: 8),
-        child: ListTile(
-          leading: Icon(icon),
-          title: Text(label),
-          subtitle: Text(
-            value ?? (optional ? 'Not selected (optional)' : 'Not selected'),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          trailing: const Icon(Icons.folder_open),
-          onTap: onPressed,
-        ),
-      );
-
-  Widget _analysisSummary(DocumentAnalysis analysis) => Card(
-        margin: const EdgeInsets.only(top: 12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('${analysis.pageCount} pages',
-                  style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              if (analysis.markerSuggestions.isEmpty)
-                const Text('No repeating marker found. Use per-page or fixed-chunk splitting, '
-                    'or add a "pages" column to the sheet.')
-              else ...[
-                const Text('Tap a suggestion to use it:'),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: analysis.markerSuggestions
-                      .map(
-                        (suggestion) => ActionChip(
-                          label: Text('${suggestion.marker}  (${suggestion.summary})'),
-                          onPressed: () => setState(() {
-                            _marker.text = suggestion.marker;
-                            _splitMode = 'section';
-                          }),
-                        ),
-                      )
-                      .toList(growable: false),
-                ),
-              ],
-              if (analysis.keyLabelSuggestions.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                const Text('Key labels found:'),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: analysis.keyLabelSuggestions
-                      .map(
-                        (suggestion) => ActionChip(
-                          label: Text(
-                            '${suggestion.keyLabel} ${suggestion.sample ?? ''}'.trim(),
-                          ),
-                          onPressed: () => setState(() => _keyLabel.text = suggestion.keyLabel),
-                        ),
-                      )
-                      .toList(growable: false),
-                ),
-              ],
-            ],
           ),
         ),
-      );
-}
+      ]);
 
-/// Sets expectations up front: the app cannot attach the PDF for you.
-class _DeliveryNotice extends StatelessWidget {
-  const _DeliveryNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      color: scheme.secondaryContainer,
-      child: Padding(
+  Widget _errorBox(String message) => Container(
+        margin: const EdgeInsets.fromLTRB(14, 14, 14, 0),
         padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.blockedSoft,
+          borderRadius: BorderRadius.circular(10),
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.info_outline, color: scheme.onSecondaryContainer),
-            const SizedBox(width: 10),
+            const Icon(Icons.error_outline, size: 17, color: AppColors.blocked),
+            const SizedBox(width: 9),
             Expanded(
-              child: Text(
-                'Sending is two taps per recipient: "Open chat" pre-fills the message, then '
-                '"Share PDF" attaches the file. WhatsApp links cannot carry an attachment.',
-                style: TextStyle(color: scheme.onSecondaryContainer),
-              ),
+              child: Text(message,
+                  style: const TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.blocked)),
             ),
           ],
         ),
-      ),
-    );
-  }
+      );
 }
