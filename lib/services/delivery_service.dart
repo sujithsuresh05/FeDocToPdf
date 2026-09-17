@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:ui' show Rect;
 
+import 'package:flutter/services.dart' show PlatformException;
+
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -13,11 +15,20 @@ import 'package:url_launcher/url_launcher.dart';
 /// why it is two taps.
 class DeliveryService {
   /// Open the recipient's WhatsApp chat with the message text ready to send.
+  ///
+  /// canLaunchUrl is consulted but never used to refuse: on Android 11+ it
+  /// reports false for any scheme missing a <queries> entry, and it can be a
+  /// false negative on other platforms too. Attempting the launch and
+  /// reporting what actually happened is more reliable than trusting it.
   Future<bool> openChat(String whatsappLink) async {
     final uri = Uri.tryParse(whatsappLink);
     if (uri == null) return false;
-    if (!await canLaunchUrl(uri)) return false;
-    return launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      return await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } on PlatformException {
+      // No handler for the URL -- WhatsApp (and any browser) is absent.
+      return false;
+    }
   }
 
   /// Hand the PDF to the share sheet, where the operator picks the WhatsApp

@@ -4,4 +4,10 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Android 9 (API 28) and above block plaintext HTTP by default, and in
+         development the backend is reached at http://<LAN-IP>:4000. Permitting
+         cleartext only in the debug build keeps release builds strict: point a
+         release build at HTTPS rather than relaxing this. -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>
