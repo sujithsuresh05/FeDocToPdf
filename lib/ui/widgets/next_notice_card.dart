@@ -50,10 +50,10 @@ class NextNoticeCard extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.scheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: blocked == null ? AppColors.accent : AppColors.blocked,
+          color: blocked == null ? context.scheme.primary : context.scheme.error,
           width: 1.5,
         ),
       ),
@@ -69,7 +69,7 @@ class NextNoticeCard extends StatelessWidget {
                       : 'NOTICE $position OF $total',
                   style: kicker(
                     context,
-                    color: blocked == null ? AppColors.accentInk : AppColors.blocked,
+                    color: blocked == null ? context.scheme.onPrimaryContainer : context.scheme.error,
                   ),
                 ),
               ),
@@ -91,7 +91,7 @@ class NextNoticeCard extends StatelessWidget {
           const SizedBox(height: 3),
           Text(
             _meta(part),
-            style: mono(text.bodySmall!, color: AppColors.muted, size: 12),
+            style: mono(text.bodySmall!, color: context.scheme.onSurfaceVariant, size: 12),
             maxLines: 2,
           ),
           if (blocked != null) ...[
@@ -167,12 +167,12 @@ class _Step extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final background = active ? AppColors.accent : Colors.transparent;
+    final background = active ? context.scheme.primary : Colors.transparent;
     final foreground = active
-        ? Colors.white
+        ? context.scheme.onPrimary
         : done
-            ? AppColors.muted
-            : AppColors.inkSoft;
+            ? context.scheme.onSurfaceVariant
+            : context.tones.inkSoft;
 
     return Material(
       color: background,
@@ -184,7 +184,7 @@ class _Step extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(9),
-            border: Border.all(color: active ? Colors.transparent : AppColors.line),
+            border: Border.all(color: active ? Colors.transparent : context.scheme.outlineVariant),
           ),
           child: Row(
             children: [
@@ -195,18 +195,18 @@ class _Step extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: active
-                      ? Colors.white.withValues(alpha: 0.24)
+                      ? context.scheme.onPrimary.withValues(alpha: 0.24)
                       : done
-                          ? AppColors.accent
-                          : AppColors.accentSoft,
+                          ? context.scheme.primary
+                          : context.scheme.primaryContainer,
                 ),
                 child: done && !active
-                    ? const Icon(Icons.check, size: 12, color: Colors.white)
+                    ? Icon(Icons.check, size: 12, color: context.scheme.onPrimary)
                     : Text(
                         '$number',
                         style: mono(
                           const TextStyle(),
-                          color: active ? Colors.white : AppColors.accentInk,
+                          color: active ? context.scheme.onPrimary : context.scheme.onPrimaryContainer,
                           size: 10.5,
                           weight: FontWeight.w500,
                         ),
@@ -243,18 +243,18 @@ class _BlockedNote extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.blockedSoft,
+        color: context.scheme.errorContainer,
         borderRadius: BorderRadius.circular(9),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.block, size: 15, color: AppColors.blocked),
+          Icon(Icons.block, size: 15, color: context.scheme.error),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               '$reason. Fix the sheet and run the split again.',
-              style: const TextStyle(fontSize: 12.5, color: AppColors.blocked),
+              style: TextStyle(fontSize: 12.5, color: context.scheme.error),
             ),
           ),
         ],

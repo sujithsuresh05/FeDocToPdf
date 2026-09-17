@@ -6,6 +6,7 @@ import '../../models/capabilities.dart';
 import '../../services/api_client.dart';
 import '../../services/api_exception.dart';
 import '../../services/settings_service.dart';
+import '../../state/theme_controller.dart';
 import '../theme.dart';
 import 'job_screen.dart';
 
@@ -17,7 +18,11 @@ import 'job_screen.dart';
 /// detects them and the operator's job is to confirm a sentence, not to
 /// remember that sections start at "Form No.128".
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({required this.theme, super.key});
+
+  /// Exposed here because setup is the screen an operator lingers on; the
+  /// choice applies to the whole app.
+  final ThemeController theme;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -245,6 +250,11 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('New run'),
         actions: [
+          IconButton(
+            tooltip: widget.theme.label,
+            onPressed: widget.theme.next,
+            icon: Icon(widget.theme.icon),
+          ),
           if (_resumableJobId != null)
             IconButton(
               tooltip: 'Back to the last run',
@@ -267,17 +277,17 @@ class _HomeScreenState extends State<HomeScreen> {
               child: FilledButton(
                 onPressed: _busy || _documentPath == null ? null : _split,
                 child: _busy
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 18, height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        child: CircularProgressIndicator(strokeWidth: 2, color: context.scheme.onPrimary))
                     : Text(_splitLabel()),
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(14, 10, 14, 0),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
               child: Text(
                 'Nothing is sent automatically. You send each notice yourself.',
-                style: TextStyle(fontSize: 11.5, color: AppColors.muted),
+                style: TextStyle(fontSize: 11.5, color: context.scheme.onSurfaceVariant),
               ),
             ),
           ],
@@ -300,9 +310,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _group({required String label, required List<Widget> children}) => Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          border: Border(bottom: BorderSide(color: AppColors.line)),
+        decoration: BoxDecoration(
+          color: context.scheme.surface,
+          border: Border(bottom: BorderSide(color: context.scheme.outlineVariant)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,16 +329,16 @@ class _HomeScreenState extends State<HomeScreen> {
       return _group(label: 'Backend', children: [
         Row(
           children: [
-            const Icon(Icons.check_circle, size: 16, color: AppColors.accent),
+            Icon(Icons.check_circle, size: 16, color: context.scheme.primary),
             const SizedBox(width: 7),
-            const Text('Connected',
-                style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.accent)),
+            Text('Connected',
+                style: TextStyle(fontWeight: FontWeight.w600, color: context.scheme.primary)),
             const SizedBox(width: 9),
             Expanded(
               child: Text(
                 _baseUrl.text.replaceFirst(RegExp(r'^https?://'), ''),
                 style: mono(Theme.of(context).textTheme.bodySmall!,
-                    color: AppColors.muted, size: 12),
+                    color: context.scheme.onSurfaceVariant, size: 12),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -388,12 +398,12 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         if (_analysing) ...[
           const SizedBox(height: 10),
-          const Row(children: [
-            SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2)),
-            SizedBox(width: 9),
+          Row(children: [
+            const SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: 9),
             Expanded(
               child: Text('Inspecting the document. A long one can take a minute.',
-                  style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                  style: TextStyle(fontSize: 12, color: context.scheme.onSurfaceVariant)),
             ),
           ]),
         ] else if (_analysis != null) ...[
@@ -415,25 +425,25 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.line),
+            border: Border.all(color: context.scheme.outlineVariant),
           ),
           child: Row(
             children: [
-              Icon(icon, size: 17, color: AppColors.muted),
+              Icon(icon, size: 17, color: context.scheme.onSurfaceVariant),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   value ?? empty,
                   style: TextStyle(
                     fontSize: 14,
-                    color: value == null ? AppColors.muted : AppColors.ink,
+                    color: value == null ? context.scheme.onSurfaceVariant : context.scheme.onSurface,
                     fontWeight: value == null ? FontWeight.w400 : FontWeight.w500,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const Icon(Icons.chevron_right, size: 18, color: AppColors.muted),
+              Icon(Icons.chevron_right, size: 18, color: context.scheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -448,14 +458,14 @@ class _HomeScreenState extends State<HomeScreen> {
       return Container(
         padding: const EdgeInsets.all(11),
         decoration: BoxDecoration(
-          color: AppColors.warnSoft,
+          color: context.scheme.tertiaryContainer,
           borderRadius: BorderRadius.circular(9),
         ),
         child: Text(
           '${analysis.pageCount} pages, but no repeating heading was found. '
           'Split per page or per fixed number of pages under Advanced, or add a '
           '"pages" column to the sheet.',
-          style: const TextStyle(fontSize: 12, height: 1.4, color: AppColors.warn),
+          style: TextStyle(fontSize: 12, height: 1.4, color: context.scheme.tertiary),
         ),
       );
     }
@@ -463,12 +473,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
-        color: AppColors.accentSoft,
+        color: context.scheme.primaryContainer,
         borderRadius: BorderRadius.circular(9),
       ),
       child: Text.rich(
         TextSpan(
-          style: const TextStyle(fontSize: 12, height: 1.45, color: AppColors.accentInk),
+          style: TextStyle(fontSize: 12, height: 1.45, color: context.scheme.onPrimaryContainer),
           children: [
             const TextSpan(text: 'Found '),
             TextSpan(
@@ -495,7 +505,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   TextStyle _codeStyle() => mono(
         const TextStyle(),
-        color: AppColors.accentInk,
+        color: context.scheme.onPrimaryContainer,
         size: 11.5,
         weight: FontWeight.w500,
       );
@@ -519,13 +529,13 @@ class _HomeScreenState extends State<HomeScreen> {
           child: ExpansionTile(
             tilePadding: EdgeInsets.zero,
             childrenPadding: const EdgeInsets.only(bottom: 4),
-            title: const Text(
+            title: Text(
               'Advanced',
-              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: AppColors.inkSoft),
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: context.tones.inkSoft),
             ),
-            subtitle: const Text(
+            subtitle: Text(
               'Split mode, matching, filenames',
-              style: TextStyle(fontSize: 11.5, color: AppColors.muted),
+              style: TextStyle(fontSize: 11.5, color: context.scheme.onSurfaceVariant),
             ),
             children: [
               DropdownButtonFormField<String>(
@@ -599,17 +609,17 @@ class _HomeScreenState extends State<HomeScreen> {
         margin: const EdgeInsets.fromLTRB(14, 14, 14, 0),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.blockedSoft,
+          color: context.scheme.errorContainer,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.error_outline, size: 17, color: AppColors.blocked),
+            Icon(Icons.error_outline, size: 17, color: context.scheme.error),
             const SizedBox(width: 9),
             Expanded(
               child: Text(message,
-                  style: const TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.blocked)),
+                  style: TextStyle(fontSize: 12.5, height: 1.4, color: context.scheme.error)),
             ),
           ],
         ),

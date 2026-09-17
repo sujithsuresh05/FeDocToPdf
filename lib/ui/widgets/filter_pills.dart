@@ -53,11 +53,11 @@ class FilterPills extends StatelessWidget {
     bool danger = false,
   }) {
     final on = selected == value;
-    final accent = danger ? AppColors.blocked : AppColors.accentInk;
+    final accent = danger ? context.scheme.error : context.scheme.onPrimaryContainer;
 
     return Material(
       color: on
-          ? (danger ? AppColors.blockedSoft : AppColors.accentSoft)
+          ? (danger ? context.scheme.errorContainer : context.scheme.primaryContainer)
           : Colors.transparent,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
@@ -67,7 +67,7 @@ class FilterPills extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: on ? Colors.transparent : AppColors.line),
+            border: Border.all(color: on ? Colors.transparent : context.scheme.outlineVariant),
           ),
           child: Text.rich(
             TextSpan(
@@ -77,7 +77,7 @@ class FilterPills extends StatelessWidget {
                   text: '$count',
                   style: mono(
                     const TextStyle(),
-                    color: on ? accent : AppColors.muted,
+                    color: on ? accent : context.scheme.onSurfaceVariant,
                     size: 12,
                     weight: FontWeight.w600,
                   ),
@@ -87,7 +87,7 @@ class FilterPills extends StatelessWidget {
             style: TextStyle(
               fontSize: 12.5,
               fontWeight: on ? FontWeight.w600 : FontWeight.w400,
-              color: on ? accent : AppColors.muted,
+              color: on ? accent : context.scheme.onSurfaceVariant,
             ),
           ),
         ),

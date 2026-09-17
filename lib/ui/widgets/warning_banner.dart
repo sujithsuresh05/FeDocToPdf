@@ -34,16 +34,16 @@ class WarningBanner extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
-      decoration: const BoxDecoration(
-        color: AppColors.warnSoft,
-        border: Border(bottom: BorderSide(color: AppColors.line)),
+      decoration: BoxDecoration(
+        color: context.scheme.tertiaryContainer,
+        border: Border(bottom: BorderSide(color: context.scheme.outlineVariant)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 1),
-            child: Icon(Icons.warning_amber_rounded, size: 17, color: AppColors.warn),
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(Icons.warning_amber_rounded, size: 17, color: context.scheme.tertiary),
           ),
           const SizedBox(width: 9),
           Expanded(
@@ -52,10 +52,10 @@ class WarningBanner extends StatelessWidget {
               children: [
                 Text(
                   headline,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12.5,
                     height: 1.4,
-                    color: AppColors.warn,
+                    color: context.scheme.tertiary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -64,7 +64,7 @@ class WarningBanner extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 5),
                     child: Text(
                       warning,
-                      style: const TextStyle(fontSize: 11.5, height: 1.4, color: AppColors.warn),
+                      style: TextStyle(fontSize: 11.5, height: 1.4, color: context.scheme.tertiary),
                     ),
                   ),
               ],
