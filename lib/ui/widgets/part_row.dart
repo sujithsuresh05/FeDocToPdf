@@ -28,10 +28,10 @@ class PartRow extends StatelessWidget {
     final sent = part.sent;
 
     final Color dot = blocked != null
-        ? AppColors.blocked
+        ? context.scheme.error
         : sent
-            ? AppColors.accent
-            : AppColors.accent.withValues(alpha: 0.4);
+            ? context.scheme.primary
+            : context.scheme.primary.withValues(alpha: 0.4);
 
     final secondary = blocked ?? part.recipient?.phone ?? '—';
 
@@ -41,8 +41,8 @@ class PartRow extends StatelessWidget {
         opacity: sent ? 0.55 : 1,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: AppColors.line)),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: context.scheme.outlineVariant)),
           ),
           child: Row(
             children: [
@@ -70,8 +70,8 @@ class PartRow extends StatelessWidget {
                     Text(
                       secondary,
                       style: blocked != null
-                          ? const TextStyle(fontSize: 11.5, color: AppColors.blocked)
-                          : mono(text.labelSmall!, color: AppColors.muted, size: 11.5),
+                          ? TextStyle(fontSize: 11.5, color: context.scheme.error)
+                          : mono(text.labelSmall!, color: context.scheme.onSurfaceVariant, size: 11.5),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -80,11 +80,11 @@ class PartRow extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               if (sent)
-                const Icon(Icons.check, size: 15, color: AppColors.accent)
+                Icon(Icons.check, size: 15, color: context.scheme.primary)
               else
                 Text(
                   part.pageLabel,
-                  style: mono(text.labelSmall!, color: AppColors.muted, size: 11.5),
+                  style: mono(text.labelSmall!, color: context.scheme.onSurfaceVariant, size: 11.5),
                 ),
             ],
           ),

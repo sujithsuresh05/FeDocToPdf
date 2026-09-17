@@ -72,7 +72,7 @@ class _JobScreenState extends State<JobScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         content: Text(message),
-        backgroundColor: bad ? AppColors.blocked : AppColors.ink,
+        backgroundColor: bad ? context.scheme.error : context.scheme.onSurface,
         behavior: SnackBarBehavior.floating,
       ));
   }
@@ -231,9 +231,9 @@ class _JobScreenState extends State<JobScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 0, 12),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.line)),
+      decoration: BoxDecoration(
+        color: context.scheme.surface,
+        border: Border(bottom: BorderSide(color: context.scheme.outlineVariant)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,7 +259,7 @@ class _JobScreenState extends State<JobScreen> {
               child: LinearProgressIndicator(
                 value: fraction,
                 minHeight: 5,
-                backgroundColor: AppColors.line,
+                backgroundColor: context.scheme.outlineVariant,
               ),
             ),
           ),
@@ -282,7 +282,7 @@ class _JobScreenState extends State<JobScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 46, color: AppColors.blocked),
+              Icon(Icons.error_outline, size: 46, color: context.scheme.error),
               const SizedBox(height: 16),
               Text('The run failed', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
