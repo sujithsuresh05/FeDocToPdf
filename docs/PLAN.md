@@ -13,18 +13,23 @@ link; this file stays the version-controlled copy.
 
 ---
 
-## ▶ Resume here — last worked 2026-09-17 (afternoon)
+## ▶ Resume here — last worked 2026-09-17 (end of day)
 
-**Where things stand:** both repos green. The backend is unchanged and verified
-(55 tests, `npm audit` clean). The Flutter app is compiled, analyzed, tested
-(24 tests) and its UI has been rebuilt and rendered — the operator flow is
-finished as far as it can be without a device.
+**Everything is merged into `Development` in both repos, both green, nothing
+in flight.** No open pull requests.
 
-**What is still unverified, and needs your machine:** the app has never been
-*run* on a phone. A device build needs the Android SDK or Xcode, neither of
+| | |
+|---|---|
+| `BeDocToPdf` `Development` | 66 tests, 0 skipped, `npm audit` clean |
+| `FeDocToPdf` `Development` | `flutter analyze` clean, 25 tests |
+| CI | live in both repos, on every PR into `Development` / `QA` / `Release` / `main` |
+| API docs | Swagger UI at `/docs`, OpenAPI 3.1 at `/openapi.json` |
+
+**The one thing outstanding, and it needs your machine:** the Flutter app has
+never been *run*. A device build needs the Android SDK or Xcode, neither of
 which exists in these containers. Everything up to and including compilation
-and layout is confirmed; what cannot be confirmed here is how WhatsApp's share
-sheet behaves.
+and layout is verified — what cannot be verified here is how WhatsApp's share
+sheet behaves, and that is the core interaction.
 
 **Next, in order:**
 
@@ -38,12 +43,13 @@ sheet behaves.
    PUBLIC_BASE_URL=http://<your-LAN-IP>:4000 npm start
    ```
    Put that same address in the app's Backend field. `localhost` on a phone
-   means the phone.
-3. **Walk one notice end to end** with the real document: the app inspects it
-   and offers `Form No.128` / `Serial No:` itself, so just confirm the
-   sentence. Then on the focused card: *Open WhatsApp chat* → *Attach the PDF*
-   → *Mark sent*. That two-tap hand-off is the one part no test covers.
-4. Then Phase 3 below.
+   means the phone. Browse `http://<LAN-IP>:4000/docs` to poke the API directly.
+3. **Walk one notice end to end** with the real document. The app inspects it
+   and offers `Form No.128` / `Serial No:` itself, so confirm the sentence, then
+   on the focused card: *Open WhatsApp chat* → *Attach the PDF* → *Mark sent*.
+4. **Come back with what broke or annoyed you.** Phase 3 is all UX and is
+   better shaped by one real run than by guessing — the rejected dark-theme
+   round demonstrated the cost of guessing.
 
 **Environment, before anything:** neither Flutter nor (in some containers)
 LibreOffice Writer is preinstalled. Each repo's `CLAUDE.md` has the exact
@@ -51,9 +57,16 @@ install steps; in `BeDocToPdf`, `scripts/setup-env.sh` handles it.
 
 **Branching:** feature branches are cut from `Development` and promoted
 `Development` → `QA` → `Release` → `main`; `hotfix/*` is the only branch cut
-from `main`. See `docs/BRANCHING.md`. **Do not base a PR on another feature
-branch** — a stacked PR on 2026-09-17 merged into its own base instead of
-`Development`, and the work had to be re-landed.
+from `main`. See `docs/BRANCHING.md`. **Never base a PR on another feature
+branch** — a stacked PR merged into its own base instead of `Development` and
+the work had to be re-landed.
+
+**Housekeeping that needs doing by hand** (the git proxy refuses ref deletion
+from the agent session): every `feature/*` branch in both repos is merged and
+safe to delete, along with `claude/wizardly-volta-8c3j0k`, and in `BeDocToPdf`
+the five branches created in error on 13 September — `development` (a lower-case
+duplicate of `Development`), `qa`, `release`,
+`feature/backend-splitter-pipeline` and `feature/project-context-docs`.
 
 ## The problem, in the user's own data
 
