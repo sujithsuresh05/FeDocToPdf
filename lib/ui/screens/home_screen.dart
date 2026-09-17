@@ -321,7 +321,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             _section('3. How to split'),
             DropdownButtonFormField<String>(
-              value: _splitMode,
+              initialValue: _splitMode,
               decoration: const InputDecoration(labelText: 'Split mode'),
               items: (capabilities?.splitModes ?? const ['section', 'page', 'chunk', 'whole'])
                   .map(
@@ -366,7 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _matchBy,
+              initialValue: _matchBy,
               decoration: const InputDecoration(
                 labelText: 'Match parts to sheet rows by',
                 helperText: 'Order is safest; keys can repeat across wards',
