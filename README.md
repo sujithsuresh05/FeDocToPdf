@@ -105,3 +105,7 @@ Phase 2 of `docs/PLAN.md`. **Written but not yet compiled** — Flutter was not
 available in the environment where this was authored. Imports, dependencies and
 structure were checked statically; expect to fix small analyzer findings on the
 first `flutter pub get && flutter analyze`. See `docs/PROGRESS.md`.
+
+cd FeDocToPdf && flutter pub get && flutter run
+cd BeDocToPdf && bash scripts/setup-env.sh
+PUBLIC_BASE_URL=http://<your-LAN-IP>:4000 npm start
