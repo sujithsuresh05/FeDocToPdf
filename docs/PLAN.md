@@ -13,47 +13,80 @@ link; this file stays the version-controlled copy.
 
 ---
 
-## ▶ Resume here — last worked 2026-09-17 (end of day)
+## ▶ Resume here — last worked 2026-09-19 (end of day)
 
 **Everything is merged into `Development` in both repos, both green, nothing
 in flight.** No open pull requests.
 
 | | |
 |---|---|
-| `BeDocToPdf` `Development` | 66 tests, 0 skipped, `npm audit` clean |
+| `BeDocToPdf` `Development` | 85 tests, 0 skipped, `npm audit` clean |
 | `FeDocToPdf` `Development` | `flutter analyze` clean, 25 tests |
 | CI | live in both repos, on every PR into `Development` / `QA` / `Release` / `main` |
 | API docs | Swagger UI at `/docs`, OpenAPI 3.1 at `/openapi.json` |
 
-**The one thing outstanding, and it needs your machine:** the Flutter app has
-never been *run*. A device build needs the Android SDK or Xcode, neither of
-which exists in these containers. Everything up to and including compilation
-and layout is verified — what cannot be verified here is how WhatsApp's share
-sheet behaves, and that is the core interaction.
+**Two things are outstanding, and both need something the containers cannot
+provide.**
+
+**1. The server needs the `ML-TTRevathi` font file — this blocks a correct run
+on the real document.** The notices are legacy 8-bit Malayalam: the `.docx`
+stores Latin characters that only become Malayalam inside a specific font. When
+that font is absent LibreOffice substitutes it *silently* — exit 0, no warning —
+and every Malayalam page converts to gibberish while the job reports success.
+The job now refuses instead (`missing_fonts`, 0 parts). Checked against the real
+362-page run, the document applies **Times New Roman, Tahoma and ML-TTRevathi**;
+the first two substitute safely and **ML-TTRevathi is the only blocker**.
+`ML-TTKarthika`, the file already in `fonts/`, is not used by this document at
+all. Drop `ML-TTRevathi` (ISFOC filename probably `MLRV0NTT.TTF` — inferred,
+not verified) into `fonts/` and run `bash scripts/install-fonts.sh`.
+
+**2. The Flutter app has never been *run*.** A device build needs the Android
+SDK or Xcode, neither of which exists in these containers. Everything up to and
+including compilation and layout is verified — what cannot be verified here is
+how WhatsApp's share sheet behaves, and that is the core interaction.
 
 **Next, in order:**
 
-1. **Run it.** On a machine with the Android SDK or Xcode:
+1. **Drop the font in and confirm.** From `BeDocToPdf`:
+   ```sh
+   bash scripts/install-fonts.sh
+   node scripts/check-fonts.mjs <the real notice>.docx    # exits 1 while a font is missing
+   ```
+2. **Run the app.** On a machine with the Android SDK or Xcode:
    ```sh
    cd FeDocToPdf && flutter pub get && flutter run
    ```
-2. **Start the backend so the phone can reach it.**
+3. **Start the backend so the phone can reach it.**
    ```sh
    cd BeDocToPdf && bash scripts/setup-env.sh
    PUBLIC_BASE_URL=http://<your-LAN-IP>:4000 npm start
    ```
    Put that same address in the app's Backend field. `localhost` on a phone
    means the phone. Browse `http://<LAN-IP>:4000/docs` to poke the API directly.
-3. **Walk one notice end to end** with the real document. The app inspects it
+4. **Walk one notice end to end** with the real document. The app inspects it
    and offers `Form No.128` / `Serial No:` itself, so confirm the sentence, then
    on the focused card: *Open WhatsApp chat* → *Attach the PDF* → *Mark sent*.
-4. **Come back with what broke or annoyed you.** Phase 3 is all UX and is
+   Open the produced PDF and **look at page 2** — that is the only way to know
+   the Malayalam rendered rather than substituted.
+5. **Come back with what broke or annoyed you.** Phase 3 is all UX and is
    better shaped by one real run than by guessing — the rejected dark-theme
    round demonstrated the cost of guessing.
+
+**Worth deciding separately:** converting the notices to Unicode Malayalam
+upstream in Word removes the font dependency permanently instead of working
+around it. Unicode Malayalam and Devanagari (Noto) are already installed by
+`scripts/setup-env.sh` and verified; they do not help the legacy files, because
+a legacy font's code points mean something else entirely.
 
 **Environment, before anything:** neither Flutter nor (in some containers)
 LibreOffice Writer is preinstalled. Each repo's `CLAUDE.md` has the exact
 install steps; in `BeDocToPdf`, `scripts/setup-env.sh` handles it.
+
+**Fonts are committed on purpose.** `BeDocToPdf` is a **private** repository, so
+a licensed font in `fonts/` is internal use rather than redistribution, and
+committing it makes a deployment reproducible. Nothing under `fonts/` is ignored.
+If the repository is ever made public, strip the proprietary ML-TT fonts from
+`fonts/` **and from history** first — a git history is published in full.
 
 **Branching:** feature branches are cut from `Development` and promoted
 `Development` → `QA` → `Release` → `main`; `hotfix/*` is the only branch cut
@@ -105,7 +138,14 @@ removing.
 - [x] `wa.me` link + message templating per part
 - [x] `POST /api/analyse` — suggests marker and key label from the document
 - [x] Background jobs + polling, retention purge, restart recovery
-- [x] 55 tests; `npm audit` clean
+- [x] OpenAPI 3.1 generated from `config.js`, served as Swagger UI at `/docs`;
+      tests fail on a route missing from the spec *and* on a spec route that
+      does not exist
+- [x] Missing-font guard: a document applying a font the server lacks is
+      refused up front (`missing_fonts`, 0 parts) rather than converted with a
+      silent substitution; `POST /api/analyse` and `scripts/check-fonts.mjs`
+      report it without committing to a job
+- [x] 85 tests; `npm audit` clean
 - [x] Verified end-to-end on the real 362-page document
 
 ## Phase 2 — Flutter operator app ✅ built, tested and rendered
@@ -166,10 +206,15 @@ removing.
 | Sheet row count ≠ notice count (5 vs 181 in the sample) | Always reported as a warning; extra parts get no link |
 | Unofficial WhatsApp automation would risk a ban | Rejected; official API only |
 | Real data contains personal phone numbers | Never committed; synthetic fixtures only |
+| The notices use a legacy 8-bit Malayalam font, and LibreOffice substitutes a missing font silently | The job is refused before conversion; the font is installed from `fonts/` |
 
 ---
 
 ## Session log
+
+Only the first session is written out here. Every session since is in
+`docs/PROGRESS.md`, newest first — that is the log to read, and the one to
+append to at the end of a working session.
 
 ### 2026-09-13 — Phase 1 built and verified; Phase 2 written
 

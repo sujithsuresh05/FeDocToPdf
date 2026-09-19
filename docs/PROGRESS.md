@@ -5,6 +5,37 @@ resume without re-reading the code.
 
 ---
 
+## 2026-09-19 — Nothing changed in the app; the blocker is a font on the server
+
+**State:** `flutter analyze` clean, 25 tests, all merged into `Development`,
+nothing in flight. No app code was touched today.
+
+The day went entirely into a backend problem that is worth knowing about here,
+because it decides what the operator sees.
+
+The notices are **legacy 8-bit Malayalam**: the `.docx` stores plain Latin
+characters with an `ML-TT` font applied, and they only become Malayalam inside
+that font's glyph table. Two things follow for this app:
+
+1. **Do not expect Malayalam out of any text the backend reports.** Markers,
+   key labels and detected text come back as Latin gibberish
+   (`Xncph´]pcw \Kck`) for the Malayalam page. That is the encoding, not a bug,
+   and it is why detection targets `Form No.128` on the English page.
+2. **A new failure mode reaches the UI.** When the server lacks a font the
+   document applies, the job fails with code `missing_fonts` and produces
+   **zero** parts, on purpose — LibreOffice would otherwise substitute the font
+   silently and every Malayalam page would convert to nonsense while the job
+   reported success. The message is written for the operator and says which
+   font to install, so the existing failure banner shows it as-is; nothing in
+   the app needed changing. `POST /api/analyse` now also returns a `fonts`
+   block, which `fromJson` tolerates because it ignores unknown keys.
+
+**Still the only unverified thing:** an actual device run. The backend
+additionally needs the `ML-TTRevathi` font file before a real run will produce
+readable Malayalam — see `docs/PLAN.md`, which is kept identical in both repos.
+
+---
+
 ## 2026-09-17 (afternoon) — contract tests, device wiring, UI rebuilt
 
 **State:** green. `flutter analyze` clean, 24 tests pass. The app has still
