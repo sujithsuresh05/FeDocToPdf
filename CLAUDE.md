@@ -24,7 +24,7 @@ Verified on **Flutter 3.47.4 / Dart 3.13.3** (2026-09-17):
 
 ```sh
 flutter pub get && flutter analyze && flutter test
-# analyze: No issues found!   test: 14/14 pass
+# analyze: No issues found!   test: 25/25 pass
 ```
 
 Still unverified: an actual device build and a run against the backend. That
