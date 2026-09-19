@@ -15,13 +15,13 @@ link; this file stays the version-controlled copy.
 
 ## ▶ Resume here — last worked 2026-09-19 (end of day)
 
-**One PR per repo is open and needs merging; everything before it is in
-`Development`.**
+**Everything is merged into `Development` in both repos, CI green in both,
+nothing in flight.** No open pull requests.
 
 | | |
 |---|---|
-| `BeDocToPdf` `Development` | 87 tests, 0 skipped, `npm audit` clean — **CI was red until the font-slot fix; merge that PR to make it green** |
-| `FeDocToPdf` `Development` | `flutter analyze` clean, 25 tests |
+| `BeDocToPdf` `Development` | 87 tests, 0 skipped, `npm audit` clean; CI green on `e0c054f` |
+| `FeDocToPdf` `Development` | `flutter analyze` clean, 25 tests; CI green |
 | CI | live in both repos, on every PR into `Development` / `QA` / `Release` / `main` |
 | API docs | Swagger UI at `/docs`, OpenAPI 3.1 at `/openapi.json` |
 
