@@ -15,15 +15,22 @@ link; this file stays the version-controlled copy.
 
 ## ▶ Resume here — last worked 2026-09-19 (end of day)
 
-**Everything is merged into `Development` in both repos, both green, nothing
-in flight.** No open pull requests.
+**One PR per repo is open and needs merging; everything before it is in
+`Development`.**
 
 | | |
 |---|---|
-| `BeDocToPdf` `Development` | 85 tests, 0 skipped, `npm audit` clean |
+| `BeDocToPdf` `Development` | 87 tests, 0 skipped, `npm audit` clean — **CI was red until the font-slot fix; merge that PR to make it green** |
 | `FeDocToPdf` `Development` | `flutter analyze` clean, 25 tests |
 | CI | live in both repos, on every PR into `Development` / `QA` / `Release` / `main` |
 | API docs | Swagger UI at `/docs`, OpenAPI 3.1 at `/openapi.json` |
+
+**Read this before touching `fonts.service.js`:** the suite passed locally while
+CI was failing, because the guard read the `eastAsia`/`cs` slots of `styles.xml`
+— LibreOffice's own fallback families, stamped into every style it writes — and
+so **refused an ordinary English document** on any server without two fonts it
+has no use for. `docs/PROGRESS.md` has the full account. A font test that reads
+the host machine decides nothing; inject the installed set.
 
 **Two things are outstanding, and both need something the containers cannot
 provide.**
@@ -145,7 +152,7 @@ removing.
       refused up front (`missing_fonts`, 0 parts) rather than converted with a
       silent substitution; `POST /api/analyse` and `scripts/check-fonts.mjs`
       report it without committing to a job
-- [x] 85 tests; `npm audit` clean
+- [x] 87 tests; `npm audit` clean
 - [x] Verified end-to-end on the real 362-page document
 
 ## Phase 2 — Flutter operator app ✅ built, tested and rendered
