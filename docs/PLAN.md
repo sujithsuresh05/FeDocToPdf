@@ -13,7 +13,7 @@ link; this file stays the version-controlled copy.
 
 ---
 
-## ▶ Resume here — last worked 2026-09-19 (end of day)
+## ▶ Resume here — last worked 2026-09-20
 
 **Everything is merged into `Development` in both repos, CI green in both,
 nothing in flight.** No open pull requests.
@@ -44,8 +44,17 @@ The job now refuses instead (`missing_fonts`, 0 parts). Checked against the real
 362-page run, the document applies **Times New Roman, Tahoma and ML-TTRevathi**;
 the first two substitute safely and **ML-TTRevathi is the only blocker**.
 `ML-TTKarthika`, the file already in `fonts/`, is not used by this document at
-all. Drop `ML-TTRevathi` (ISFOC filename probably `MLRV0NTT.TTF` — inferred,
-not verified) into `fonts/` and run `bash scripts/install-fonts.sh`.
+all. Drop `ML-TTRevathi` into `fonts/` and run `bash scripts/install-fonts.sh`.
+
+**`MLW-TTRevathi` is not it, and `fonts/` now holds a copy so this is not
+re-litigated.** Tried 2026-09-20: the `W` variant is a different encoding, not a
+different look. The notices store byte `0xb6` for the `ന്ന` conjunct 3077
+times, and `0xb6` is one of six code points MLW does not map, so aliasing it
+through prints a Latin `¶` wherever that conjunct belongs — on every page, with
+everything around it correct. The guard refuses it anyway (`fc-list` reports
+faces, not aliases). **Check the family a file declares, never its filename:**
+`fc-query -f '%{family}\n' <file>.ttf` must say `ML-TTRevathi`, no `W`.
+`fonts/README.md` has the full evidence.
 
 **2. The Flutter app has never been *run*.** A device build needs the Android
 SDK or Xcode, neither of which exists in these containers. Everything up to and
