@@ -13,14 +13,14 @@ link; this file stays the version-controlled copy.
 
 ---
 
-## ▶ Resume here — last worked 2026-09-19 (end of day)
+## ▶ Resume here — last worked 2026-09-20
 
-**Everything is merged into `Development` in both repos, CI green in both,
-nothing in flight.** No open pull requests.
+**One PR open per repo, both green, carrying the font work.** Everything before
+them is merged into `Development`, which is green in both repos.
 
 | | |
 |---|---|
-| `BeDocToPdf` `Development` | 87 tests, 0 skipped, `npm audit` clean; CI green on `e0c054f` |
+| `BeDocToPdf` `Development` | 87 tests, 0 skipped, `npm audit` clean; CI green |
 | `FeDocToPdf` `Development` | `flutter analyze` clean, 25 tests; CI green |
 | CI | live in both repos, on every PR into `Development` / `QA` / `Release` / `main` |
 | API docs | Swagger UI at `/docs`, OpenAPI 3.1 at `/openapi.json` |
@@ -32,32 +32,39 @@ so **refused an ordinary English document** on any server without two fonts it
 has no use for. `docs/PROGRESS.md` has the full account. A font test that reads
 the host machine decides nothing; inject the installed set.
 
-**Two things are outstanding, and both need something the containers cannot
-provide.**
+**The font blocker is cleared. One thing is outstanding, and it needs your
+hardware.**
 
-**1. The server needs the `ML-TTRevathi` font file — this blocks a correct run
-on the real document.** The notices are legacy 8-bit Malayalam: the `.docx`
-stores Latin characters that only become Malayalam inside a specific font. When
-that font is absent LibreOffice substitutes it *silently* — exit 0, no warning —
-and every Malayalam page converts to gibberish while the job reports success.
-The job now refuses instead (`missing_fonts`, 0 parts). Checked against the real
-362-page run, the document applies **Times New Roman, Tahoma and ML-TTRevathi**;
-the first two substitute safely and **ML-TTRevathi is the only blocker**.
-`ML-TTKarthika`, the file already in `fonts/`, is not used by this document at
-all. Drop `ML-TTRevathi` (ISFOC filename probably `MLRV0NTT.TTF` — inferred,
-not verified) into `fonts/` and run `bash scripts/install-fonts.sh`.
+**✅ `ML-TTRevathi` is in `fonts/` and the whole run is verified.** Three faces
+(Normal, Bold, Bold Italic), all declaring family `ML-TTRevathi`. End to end on
+2026-09-20: `/api/analyse` reports `critical: []` and `willBeRefused: false`, a
+real job yields **181 parts of exactly 2 pages** named
+`ProfTax_Traders_Notice-1..181.pdf`, and a downloaded part embeds
+`ML-TTRevathi` and renders as Malayalam matching the operator's reference PDF.
+The only font warning left is the harmless one: Times New Roman and Tahoma are
+substituted, which affects Latin spacing and nothing else.
 
-**2. The Flutter app has never been *run*.** A device build needs the Android
+Two details recorded so they are not rediscovered:
+
+- **The Bold face lacks `0xef`, `0xf0`, `0xf1`** (`ണ്ട`, `ൽ`, `ല്ല`), which the
+  document sets in bold 3620 times. It renders correctly anyway — LibreOffice
+  falls back within the family to the Normal face, which covers all 83 code
+  points used. Do not drop the Bold face to "fix" this.
+- **`MLW-TTRevathi` is a different font**, one code point apart, and is kept in
+  `fonts/` only to keep that check reproducible. See `fonts/README.md`.
+
+**The Flutter app has never been *run*.** A device build needs the Android
 SDK or Xcode, neither of which exists in these containers. Everything up to and
 including compilation and layout is verified — what cannot be verified here is
 how WhatsApp's share sheet behaves, and that is the core interaction.
 
 **Next, in order:**
 
-1. **Drop the font in and confirm.** From `BeDocToPdf`:
+1. **Install the fonts on whatever machine runs the backend.** They are in the
+   repo now, so this is one command:
    ```sh
    bash scripts/install-fonts.sh
-   node scripts/check-fonts.mjs <the real notice>.docx    # exits 1 while a font is missing
+   node scripts/check-fonts.mjs <the real notice>.docx    # now exits 0
    ```
 2. **Run the app.** On a machine with the Android SDK or Xcode:
    ```sh
@@ -79,11 +86,32 @@ how WhatsApp's share sheet behaves, and that is the core interaction.
    better shaped by one real run than by guessing — the rejected dark-theme
    round demonstrated the cost of guessing.
 
-**Worth deciding separately:** converting the notices to Unicode Malayalam
-upstream in Word removes the font dependency permanently instead of working
-around it. Unicode Malayalam and Devanagari (Noto) are already installed by
-`scripts/setup-env.sh` and verified; they do not help the legacy files, because
-a legacy font's code points mean something else entirely.
+**Still worth deciding separately, though no longer urgent:** converting the
+notices to Unicode Malayalam would remove the proprietary-font dependency
+altogether, rather than depending on a licensed file being installed wherever
+this runs. The font route works now, so this is an improvement and not a fix.
+Unicode Malayalam and Devanagari (Noto) are already installed by
+`scripts/setup-env.sh` and verified.
+
+The operator found the conversion table it would need:
+**<https://lsgkerala.gov.in/unicode/>** — Kerala LSG's own "convert ISFOC
+ML-TTRevathi to Unicode Malayalam" tool, which names our exact font. **The
+egress proxy in these containers denies that host** (403 on CONNECT), so the
+script has to be saved from a browser and handed over; it cannot be fetched
+from a session.
+
+Two things established while looking at this, so they are not re-derived:
+
+- **The mapping cannot come from the font.** `MLW-TTRevathi` has 166 glyphs and
+  every one is named as a Latin character (`X`, `n`, `Egrave`, `Ograve`) — the
+  file carries Malayalam *shapes* with no record of what they mean. A table is
+  required; there is nothing to reverse-engineer.
+- **It will not be a 1:1 byte map.** Byte `0xb6` alone stands for the whole
+  `ന്ന` conjunct, so it expands to a multi-code-point Unicode sequence, and
+  ISFOC stores pre-base vowel signs in visual order where Unicode wants logical
+  order. Expect a rule-based converter, not a lookup table, and verify any
+  candidate against the operator's reference PDFs — those are ground truth for
+  what the output should read.
 
 **Environment, before anything:** neither Flutter nor (in some containers)
 LibreOffice Writer is preinstalled. Each repo's `CLAUDE.md` has the exact
