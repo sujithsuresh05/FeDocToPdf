@@ -88,11 +88,30 @@ how WhatsApp's share sheet behaves, and that is the core interaction.
    better shaped by one real run than by guessing — the rejected dark-theme
    round demonstrated the cost of guessing.
 
-**Worth deciding separately:** converting the notices to Unicode Malayalam
-upstream in Word removes the font dependency permanently instead of working
-around it. Unicode Malayalam and Devanagari (Noto) are already installed by
-`scripts/setup-env.sh` and verified; they do not help the legacy files, because
-a legacy font's code points mean something else entirely.
+**Worth deciding separately, and now the more promising route:** converting the
+notices to Unicode Malayalam removes the proprietary-font dependency permanently
+instead of working around it. Unicode Malayalam and Devanagari (Noto) are
+already installed by `scripts/setup-env.sh` and verified.
+
+The operator found the conversion table we would need:
+**<https://lsgkerala.gov.in/unicode/>** — Kerala LSG's own "convert ISFOC
+ML-TTRevathi to Unicode Malayalam" tool, which names our exact font. **The
+egress proxy in these containers denies that host** (403 on CONNECT), so the
+script has to be saved from a browser and handed over; it cannot be fetched
+from a session.
+
+Two things established while looking at this, so they are not re-derived:
+
+- **The mapping cannot come from the font.** `MLW-TTRevathi` has 166 glyphs and
+  every one is named as a Latin character (`X`, `n`, `Egrave`, `Ograve`) — the
+  file carries Malayalam *shapes* with no record of what they mean. A table is
+  required; there is nothing to reverse-engineer.
+- **It will not be a 1:1 byte map.** Byte `0xb6` alone stands for the whole
+  `ന്ന` conjunct, so it expands to a multi-code-point Unicode sequence, and
+  ISFOC stores pre-base vowel signs in visual order where Unicode wants logical
+  order. Expect a rule-based converter, not a lookup table, and verify any
+  candidate against the operator's reference PDFs — those are ground truth for
+  what the output should read.
 
 **Environment, before anything:** neither Flutter nor (in some containers)
 LibreOffice Writer is preinstalled. Each repo's `CLAUDE.md` has the exact
