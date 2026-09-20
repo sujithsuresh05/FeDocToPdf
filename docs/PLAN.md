@@ -229,7 +229,12 @@ removing.
 - [ ] Shared job store (Postgres/Redis) so it can run more than one instance
 - [ ] Object storage for parts instead of local disk; signed download URLs
 - [ ] Structured audit log: who sent what to which number, when
-- [ ] Container image with LibreOffice baked in; CI running `npm test`
+- [x] CI running `npm test` on Node 20 and 22, asserting nothing was skipped
+- [~] Container image with LibreOffice **and the licensed fonts** baked in —
+      `Dockerfile`, `docker-compose.yml`, `docs/DOCKER.md`. Written and the
+      compose file validated; **not yet built**, since the authoring container
+      has the docker CLI but no daemon. The first `docker build` is the
+      verification.
 - [ ] Data retention policy — these are citizens' tax notices
 
 ## Known risks
