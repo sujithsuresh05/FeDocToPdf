@@ -59,9 +59,17 @@ rule (gitignore resolves by last match). It matters: the lock pins `share_plus`
 **10.1.4**, and share_plus 11 replaces the `Share.shareXFiles` call in
 `lib/services/delivery_service.dart`.
 
-Platform folders (`android/`, `ios/`) are committed. Do not re-run
-`flutter create .` casually — it reinstates a counter-app `test/widget_test.dart`
-that fails, and rewrites `pubspec.lock` with downgraded transitive packages.
+Platform folders (`android/`, `ios/`) are committed. **Never run
+`flutter create .` here** — it reinstates a counter-app `test/widget_test.dart`
+referring to a `MyApp` this project does not have, so `flutter test` stops
+compiling, and it rewrites `pubspec.lock` with downgraded transitive packages.
+
+This bit the operator on 2026-09-21, and not by accident: **`README.md` used to
+instruct it** ("Platform folders are not committed. On a fresh clone, generate
+them once"), which was false, and `flutter run` suggests the same command
+whenever it cannot find a device. Both are now corrected, and README has a
+Troubleshooting section for the two errors it produces. Recovery is
+`rm test/widget_test.dart`.
 
 ## Architecture
 
