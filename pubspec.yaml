@@ -19,7 +19,7 @@ dependencies:
   # API calls and multipart uploads.
   http: ^1.2.0
   # Picking the .docx and the .csv/.xlsx from device storage.
-  file_picker: ^8.0.0
+  file_picker: ^11.0.3
   # Opening wa.me links in WhatsApp.
   url_launcher: ^6.2.5
   # Handing the downloaded PDF to WhatsApp through the OS share sheet --

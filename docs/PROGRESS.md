@@ -5,6 +5,81 @@ resume without re-reading the code.
 
 ---
 
+## 2026-09-21 — First real device build; two things in the way, both now fixed
+
+The operator got as far as `flutter run` on a Mac. Two failures, neither caused
+by app code, and the first one was a documentation bug of mine.
+
+### The README told them to run the one forbidden command
+
+`README.md` said "Platform folders are not committed. On a fresh clone, generate
+them once: `flutter create . --platforms=android,ios`". Both folders *are*
+committed, and that command writes a counter-app `test/widget_test.dart`
+referring to a `MyApp` this project does not have, so `flutter test` stops
+compiling, and rewrites `pubspec.lock` with downgraded transitive packages.
+`CLAUDE.md` warned against it on one page while README instructed it on another.
+
+`flutter run` suggests the same command whenever it cannot find a device, so the
+warning now lives where someone reading about running the app will see it, with
+a Troubleshooting section for both errors it produces. Recovery is
+`rm test/widget_test.dart` — the file is untracked and has never been in the
+repo.
+
+### The Android build failed on compileSdk, and the app's setting was irrelevant
+
+```
+Dependency ':flutter_plugin_android_lifecycle' requires ... version 36 or later
+:file_picker is currently compiled against android-34
+```
+
+The obvious reading — raise `compileSdk` in `android/app/build.gradle.kts` — is
+wrong. The app already uses `compileSdk = flutter.compileSdkVersion`. Read from
+the pub cache instead of guessing:
+
+| package | declares |
+|---|---|
+| `file_picker 8.3.7` | `compileSdk 34`, **hardcoded** |
+| `flutter_plugin_android_lifecycle 2.0.35` | `flutter.compileSdkVersion` → 36 |
+
+Both are built from source in the app's own Gradle build, so the mismatch was
+inside file_picker itself. **`file_picker 11.0.3` follows
+`flutter.compileSdkVersion`**, so both modules track the same level. Toolchain
+was never the problem: AGP 9.1.0, Gradle 9.3.1, Kotlin 2.4.0 already support 36.
+
+One source change came with it: `FilePicker` is now an `abstract final class`
+with static methods, so `FilePicker.platform.pickFiles(...)` became
+`FilePicker.pickFiles(...)`. I had predicted the API was unchanged; `flutter
+analyze` proved otherwise, which is why it was run rather than assumed.
+
+### file_picker is now capped at 11 by the share_plus pin
+
+Trying 13 first made the coupling visible: `file_picker 13` → `windows_file_picker`
+→ `share_plus ^13`, which version-solving rejects against the deliberate
+`share_plus ^10.1.0` pin. 12.x also restructures into federated plugins and
+needs Flutter ≥ 3.38.
+
+So moving file_picker past 11 means taking share_plus 13 and migrating
+`Share.shareXFiles` to `SharePlus.instance.share(ShareParams(...))`. Worth doing
+eventually — not while the share sheet, the one interaction never exercised on a
+device, is still unverified. Recorded in `CLAUDE.md`.
+
+### Verified, and not
+
+Installed Flutter 3.47.5 in the container to resolve this for real rather than
+by inspection:
+
+- `flutter analyze` — no issues.
+- `flutter test` — 25 pass.
+- `pubspec.lock` diff is file_picker 8.3.7 → 11.0.3 plus three transitive
+  desktop packages (`dbus`, `petitparser`, `xml`). **`share_plus` untouched at
+  10.1.4.**
+
+**The Android build itself is still unverified here** — no Android SDK in the
+container, so `assembleDebug` could not be run. The operator's next
+`flutter run` is the verification.
+
+---
+
 ## 2026-09-19 — Nothing changed in the app; the blocker is a font on the server
 
 **State:** `flutter analyze` clean, 25 tests, all merged into `Development`,

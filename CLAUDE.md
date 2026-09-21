@@ -59,6 +59,41 @@ rule (gitignore resolves by last match). It matters: the lock pins `share_plus`
 **10.1.4**, and share_plus 11 replaces the `Share.shareXFiles` call in
 `lib/services/delivery_service.dart`.
 
+### `file_picker` is capped at 11 by that share_plus pin
+
+`file_picker` is **11.0.3** and cannot go higher without unpinning share_plus:
+
+- **12.x** restructures into federated plugins (`android_file_picker` and
+  friends) and needs Dart ≥ 3.10 / Flutter ≥ 3.38.
+- **13.x** depends on `windows_file_picker`, which requires `share_plus ^13`.
+  Version solving fails against `share_plus ^10.1.0`.
+
+So the two are coupled: taking file_picker 13 means taking share_plus 13 and
+migrating `Share.shareXFiles` to `SharePlus.instance.share(ShareParams(...))`.
+Worth doing eventually, but not while the share sheet — the one interaction
+that has never been exercised on a device — is still unverified.
+
+### Why 8.3.7 had to go: the Android build failed on compileSdk
+
+`file_picker` **8.3.7 hardcodes `compileSdk 34`**, while
+`flutter_plugin_android_lifecycle` (its own transitive dependency) uses
+`compileSdk = flutter.compileSdkVersion`, which is **36** on current stable. The
+AAR metadata check then fails the Android build:
+
+```
+Dependency ':flutter_plugin_android_lifecycle' requires ... version 36 or later
+:file_picker is currently compiled against android-34
+```
+
+Raising `compileSdk` in `android/app/build.gradle.kts` does **not** fix this —
+the app already uses `flutter.compileSdkVersion`; it was file_picker's own
+hardcoded value. 11.0.3 follows `flutter.compileSdkVersion`, so both modules
+track the same level.
+
+The upgrade has one source change: `FilePicker` became an `abstract final class`
+with static methods, so **`FilePicker.platform.pickFiles(...)` is now
+`FilePicker.pickFiles(...)`**. Parameters and `FilePickerResult` are unchanged.
+
 Platform folders (`android/`, `ios/`) are committed. **Never run
 `flutter create .` here** — it reinstates a counter-app `test/widget_test.dart`
 referring to a `MyApp` this project does not have, so `flutter test` stops

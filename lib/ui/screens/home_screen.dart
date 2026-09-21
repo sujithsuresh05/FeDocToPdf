@@ -125,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _pickDocument() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: AppConfig.documentExtensions,
     );
@@ -140,7 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _pickRecipients() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: AppConfig.recipientExtensions,
     );
