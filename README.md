@@ -43,16 +43,27 @@ flutter pub get
 flutter run
 ```
 
-Platform folders are not committed. On a fresh clone, generate them once:
+**`android/` and `ios/` are committed, so there is nothing to generate.**
+
+> ### ⚠️ Never run `flutter create .` in this repo
+>
+> An earlier version of this file told you to, and it was wrong. That command
+> does two damaging things to an existing project:
+>
+> 1. It writes a counter-app `test/widget_test.dart` referring to a `MyApp`
+>    this project does not have, so `flutter test` then fails to compile.
+> 2. It rewrites `pubspec.lock`, downgrading transitive packages. The lock pins
+>    `share_plus` **10.1.4** on purpose — version 11 removes the
+>    `Share.shareXFiles` call in `lib/services/delivery_service.dart`.
+>
+> `flutter run` itself suggests this command when it cannot find a device. It is
+> suggesting the wrong fix; see *Troubleshooting* below.
+
+Tests (pure Dart, no device or emulator needed):
 
 ```sh
-flutter create . --platforms=android,ios
-```
-
-Tests (pure Dart, no device needed):
-
-```sh
-flutter test
+flutter test        # 25 tests
+flutter analyze     # no issues
 ```
 
 ### Pointing the app at the backend
@@ -66,9 +77,48 @@ flutter test
 Also set `PUBLIC_BASE_URL` on the backend to that same address, or the download
 links it returns will point at the phone's own `localhost`.
 
-Android release builds need `INTERNET` permission (debug has it already), and
-plain-HTTP access to a LAN address needs a `networkSecurityConfig` or
-`usesCleartextTraffic`. Use HTTPS in production.
+`INTERNET` is declared in the **main** manifest, so release builds have it too,
+and the `<queries>` entry `canLaunchUrl` needs on Android 11+ is there.
+`usesCleartextTraffic` is set in the **debug** manifest only, so a debug build
+can reach a plain-HTTP LAN backend while release builds are not opened up. Use
+HTTPS in production.
+
+## Troubleshooting
+
+### `Error: Couldn't find constructor 'MyApp'` in `test/widget_test.dart`
+
+That file is not part of this project and never has been — `flutter create .`
+wrote it. Delete it:
+
+```sh
+rm test/widget_test.dart
+flutter test
+```
+
+### `No supported devices connected` — macOS and Chrome listed as unsupported
+
+Expected. Only `android/` and `ios/` are committed, so a desktop or web target
+is not configured. **Do not take `flutter run`'s advice to run
+`flutter create .`** — see the warning above. Get a supported device instead:
+
+```sh
+# iOS simulator (needs Xcode)
+open -a Simulator
+flutter run
+
+# Android emulator
+flutter emulators                      # list
+flutter emulators --launch <id>
+flutter run
+
+# A real phone: enable USB debugging (Android) or trust the Mac (iOS), plug in
+flutter devices
+```
+
+**A real phone is what actually matters here.** The core interaction is
+WhatsApp's share sheet, and WhatsApp is not installed on a simulator or
+emulator — so a simulator verifies the form, the polling and the delivery list,
+but not the hand-off itself.
 
 ## Layout
 
@@ -101,7 +151,14 @@ lib/
 
 ## Status
 
-Phase 2 of `docs/PLAN.md`. **Written but not yet compiled** — Flutter was not
-available in the environment where this was authored. Imports, dependencies and
-structure were checked statically; expect to fix small analyzer findings on the
-first `flutter pub get && flutter analyze`. See `docs/PROGRESS.md`.
+Phase 2 of `docs/PLAN.md`. **Compiles, analyzes clean and passes its tests** —
+verified on Flutter 3.47.4 / Dart 3.13.3: `flutter analyze` reports no issues
+and `flutter test` passes 25.
+
+**Still unverified: a run on a real device.** That needs the Android SDK or
+Xcode, and it is the one thing that matters most, because the core interaction
+is WhatsApp's share sheet and WhatsApp exists on neither a simulator nor an
+emulator. See `docs/PROGRESS.md`.
+
+The backend it talks to is verified end to end: a 362-page ward document yields
+181 correctly-rendered Malayalam notices.
